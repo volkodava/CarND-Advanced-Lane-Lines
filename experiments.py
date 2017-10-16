@@ -141,10 +141,12 @@ def filter_color(image, lower_color_mask, upper_color_mask=None, trg_color_space
 
 # Define a function that applies Sobel x or y,
 # then takes an absolute value and applies a threshold.
-def abs_sobel_thresh(img, sobel_kernel=3, orient='x', thresh=(0, 255)):
+def abs_sobel_thresh(image, sobel_kernel=3, orient='x', thresh=(0, 255), rgb2gray=True):
     # Apply the following steps to img
     # 1) Convert to grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    gray = image
+    if rgb2gray:
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     # 2) Take the derivative in x or y given orient = 'x' or 'y'
     sbl = cv2.Sobel(gray, cv2.CV_64F, orient == 'x', orient == 'y', ksize=sobel_kernel)
     # 3) Take the absolute value of the derivative or gradient
@@ -156,16 +158,18 @@ def abs_sobel_thresh(img, sobel_kernel=3, orient='x', thresh=(0, 255)):
     binary_output = np.zeros_like(scaled_sbl)
     binary_output[(scaled_sbl >= thresh[0]) & (scaled_sbl <= thresh[1])] = 1
     # 6) Return this mask as your binary_output image
-    return binary_output
+    return np.float32(binary_output)
 
 
 # Define a function that applies Sobel x and y,
 # then computes the magnitude of the gradient
 # and applies a threshold
-def mag_thresh(img, sobel_kernel=3, thresh=(0, 255)):
+def mag_thresh(image, sobel_kernel=3, thresh=(0, 255), rgb2gray=True):
     # Apply the following steps to img
     # 1) Convert to grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    gray = image
+    if rgb2gray:
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     # 2) Take the gradient in x and y separately
     sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
     sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
@@ -178,16 +182,18 @@ def mag_thresh(img, sobel_kernel=3, thresh=(0, 255)):
     binary_output = np.zeros_like(scaled_sobel)
     binary_output[(scaled_sobel >= thresh[0]) & (scaled_sobel <= thresh[1])] = 1
     # 6) Return this mask as your binary_output image
-    return binary_output
+    return np.float32(binary_output)
 
 
 # Define a function that applies Sobel x and y,
 # then computes the direction of the gradient
 # and applies a threshold.
-def dir_threshold(img, sobel_kernel=3, thresh=(0, np.pi / 2)):
+def dir_threshold(image, sobel_kernel=3, thresh=(0, np.pi / 2), rgb2gray=True):
     # Apply the following steps to img
     # 1) Convert to grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    gray = image
+    if rgb2gray:
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     # 2) Take the gradient in x and y separately
     sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
     sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
@@ -200,7 +206,7 @@ def dir_threshold(img, sobel_kernel=3, thresh=(0, np.pi / 2)):
     binary_output = np.zeros_like(gradient_direct)
     binary_output[(gradient_direct >= thresh[0]) & (gradient_direct <= thresh[1])] = 1
     # 6) Return this mask as your binary_output image
-    return binary_output
+    return np.float32(binary_output)
 
 
 def gaussian_blur(img, kernel_size):
@@ -289,3 +295,16 @@ if __name__ == "__main__":
     #             title="Input Image Transformation")
 
     # TODO: Apply sobel filters
+    ksize = 3
+    # Apply each of the thresholding functions
+    gradx = abs_sobel_thresh(example_test_image, orient='x', sobel_kernel=ksize, thresh=(20, 100))
+    grady = abs_sobel_thresh(example_test_image, orient='y', sobel_kernel=ksize, thresh=(20, 100))
+    mag_binary = mag_thresh(example_test_image, sobel_kernel=ksize, thresh=(30, 100))
+
+    ksize = 15
+    dir_binary = dir_threshold(example_test_image, sobel_kernel=ksize, thresh=(0.7, 1.3))
+
+    images_to_show = [example_warped_image, gradx, grady, mag_binary, dir_binary]
+    labels_to_show = ["Warped Image", "Sobel Thresh X", "Sobel Thresh Y", "Magnitude Thresh", "Gradient Direction"]
+    show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
+                title="Warped Image Transformation")
