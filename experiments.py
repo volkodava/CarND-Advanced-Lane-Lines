@@ -297,14 +297,15 @@ if __name__ == "__main__":
     # TODO: Apply sobel filters
     ksize = 3
     # Apply each of the thresholding functions
-    gradx = abs_sobel_thresh(example_test_image, orient='x', sobel_kernel=ksize, thresh=(20, 100))
-    grady = abs_sobel_thresh(example_test_image, orient='y', sobel_kernel=ksize, thresh=(20, 100))
-    mag_binary = mag_thresh(example_test_image, sobel_kernel=ksize, thresh=(30, 100))
+    gradx = abs_sobel_thresh(example_warped_image, orient='x', sobel_kernel=ksize, thresh=(20, 100))
+    grady = abs_sobel_thresh(example_warped_image, orient='y', sobel_kernel=ksize, thresh=(20, 100))
+    mag_binary = mag_thresh(example_warped_image, sobel_kernel=ksize, thresh=(30, 100))
 
     ksize = 15
-    dir_binary = dir_threshold(example_test_image, sobel_kernel=ksize, thresh=(0.7, 1.3))
+    dir_binary = dir_threshold(example_warped_image, sobel_kernel=ksize, thresh=(0.7, 1.3))
 
-    images_to_show = [example_warped_image, gradx, grady, mag_binary, dir_binary]
-    labels_to_show = ["Warped Image", "Sobel Thresh X", "Sobel Thresh Y", "Magnitude Thresh", "Gradient Direction"]
+    images_to_show = [example_test_image, example_warped_image, gradx, grady, mag_binary, dir_binary]
+    labels_to_show = ["Image", "Warped Image", "Sobel Thresh X", "Sobel Thresh Y", "Magnitude Thresh",
+                      "Gradient Direction"]
     show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
                 title="Warped Image Transformation")
