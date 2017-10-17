@@ -39,7 +39,7 @@ def show_images(images, labels, cols, figsize=(16, 8), title=None):
     plt.show()
 
 
-def read_images(fnames):
+def read_images(fnames, gray_conv=lambda rgb_image: cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)):
     images = []
     gray_images = []
 
@@ -47,7 +47,7 @@ def read_images(fnames):
         bgr_image = cv2.imread(fname)
 
         rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
-        gray = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
+        gray = gray_conv(rgb_image)
 
         images.append(rgb_image)
         gray_images.append(gray)
@@ -219,6 +219,15 @@ def moving_average(array, period):
     return ret[period - 1:] / period
 
 
+def grayscale(image, lower_yellow=np.array([0, 70, 100]), upper_yellow=np.array([30, 255, 255]),
+              lower_white=np.array([0, 0, 220]), upper_white=np.array([255, 40, 255])):
+    yellow_image = filter_color(image, lower_yellow, upper_yellow)
+    white_image = filter_color(image, lower_white, upper_white)
+    combined = cv2.bitwise_or(yellow_image, white_image)
+
+    return np.mean(combined, axis=2)
+
+
 if __name__ == "__main__":
     cal_fnames = [path for path in glob.iglob('camera_cal/*.jpg', recursive=True)]
     cal_images, cal_gray_images = read_images(cal_fnames)
@@ -294,9 +303,7 @@ if __name__ == "__main__":
     # show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
     #             title="Input Image Transformation")
 
-    # TODO: Apply sobel filters
     ksize = 3
-    # Apply each of the thresholding functions
     gradx = abs_sobel_thresh(example_warped_image, orient='x', sobel_kernel=ksize, thresh=(20, 100))
     grady = abs_sobel_thresh(example_warped_image, orient='y', sobel_kernel=ksize, thresh=(20, 100))
     mag_binary = mag_thresh(example_warped_image, sobel_kernel=ksize, thresh=(30, 100))
@@ -307,5 +314,24 @@ if __name__ == "__main__":
     images_to_show = [example_test_image, example_warped_image, gradx, grady, mag_binary, dir_binary]
     labels_to_show = ["Image", "Warped Image", "Sobel Thresh X", "Sobel Thresh Y", "Magnitude Thresh",
                       "Gradient Direction"]
+    # show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
+    #             title="Warped Image Transformation")
+
+    ksize = 3
+    example_warped_gray_image = grayscale(example_warped_image)
+
+    gradx = abs_sobel_thresh(example_warped_gray_image, orient='x', sobel_kernel=ksize, thresh=(20, 100),
+                             rgb2gray=False)
+    grady = abs_sobel_thresh(example_warped_gray_image, orient='y', sobel_kernel=ksize, thresh=(20, 100),
+                             rgb2gray=False)
+    mag_binary = mag_thresh(example_warped_gray_image, sobel_kernel=ksize, thresh=(30, 100), rgb2gray=False)
+
+    ksize = 15
+    dir_binary = dir_threshold(example_warped_gray_image, sobel_kernel=ksize, thresh=(0.7, 1.3), rgb2gray=False)
+
+    images_to_show = [example_test_image, example_warped_image, example_warped_gray_image, gradx, grady, mag_binary,
+                      dir_binary]
+    labels_to_show = ["Image", "Warped Image", "Warped Gray Image", "Sobel Thresh X", "Sobel Thresh Y",
+                      "Magnitude Thresh", "Gradient Direction"]
     show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
                 title="Warped Image Transformation")

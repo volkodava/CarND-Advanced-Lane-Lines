@@ -23,7 +23,7 @@ class ThreshViewer:
         plugin = Plugin(image_filter=self.image_filter, dock="right")
 
         self.setup_names = ['Sobel Thresh X', 'Sobel Thresh Y', 'Sobel Thresh X / Y', 'Magnitude Thresh',
-                            'Gradient Direction', 'Magnitude / Gradient Direction Thresh']
+                            'Gradient Direction', 'Magnitude / Gradient Direction Thresh', "2 & 2", "2 | 2"]
 
         self.show_orig = CheckBox('show_orig', value=False, alignment='left')
 
@@ -51,6 +51,10 @@ class ThreshViewer:
     def image_filter(self, image, *args, **kwargs):
         print("image: ", image.shape)
 
+        # use grayscale based on calculated color values
+        image_gray = grayscale(image)
+        print("gray image: ", image_gray.shape)
+
         show_orig = kwargs["show_orig"]
         setup = kwargs["setup"]
         gradx_ksize = kwargs["gradx_ksize"]
@@ -69,15 +73,21 @@ class ThreshViewer:
         if show_orig:
             return image
 
-        gradx = abs_sobel_thresh(image, orient='x', sobel_kernel=gradx_ksize,
-                                 thresh=(gradx_thresh_low, gradx_thresh_high))
-        grady = abs_sobel_thresh(image, orient='y', sobel_kernel=grady_ksize,
-                                 thresh=(grady_thresh_low, grady_thresh_high))
+        gradx = abs_sobel_thresh(image_gray, orient='x', sobel_kernel=gradx_ksize,
+                                 thresh=(gradx_thresh_low, gradx_thresh_high), rgb2gray=False)
+        grady = abs_sobel_thresh(image_gray, orient='y', sobel_kernel=grady_ksize,
+                                 thresh=(grady_thresh_low, grady_thresh_high), rgb2gray=False)
 
-        mag_binary = mag_thresh(image, sobel_kernel=mag_binary_ksize,
-                                thresh=(mag_binary_thresh_low, mag_binary_thresh_high))
-        dir_binary = dir_threshold(image, sobel_kernel=dir_binary_ksize,
-                                   thresh=(dir_binary_thresh_low, dir_binary_thresh_high))
+        mag_binary = mag_thresh(image_gray, sobel_kernel=mag_binary_ksize,
+                                thresh=(mag_binary_thresh_low, mag_binary_thresh_high), rgb2gray=False)
+        dir_binary = dir_threshold(image_gray, sobel_kernel=dir_binary_ksize,
+                                   thresh=(dir_binary_thresh_low, dir_binary_thresh_high), rgb2gray=False)
+
+        combined_sobel = np.zeros_like(gradx)
+        combined_sobel[((gradx == 1) & (grady == 1))] = 1
+
+        combined_magn_grad = np.zeros_like(mag_binary)
+        combined_magn_grad[((mag_binary == 1) & (dir_binary == 1))] = 1
 
         result_image = None
         if setup == "Sobel Thresh X":
@@ -85,17 +95,19 @@ class ThreshViewer:
         elif setup == "Sobel Thresh Y":
             result_image = grady
         elif setup == "Sobel Thresh X / Y":
-            combined = np.zeros_like(gradx)
-            combined[((gradx == 1) & (grady == 1))] = 1
-            result_image = combined
+            result_image = combined_sobel
         elif setup == "Magnitude Thresh":
             result_image = mag_binary
         elif setup == "Gradient Direction":
             result_image = dir_binary
         elif setup == "Magnitude / Gradient Direction Thresh":
-            combined = np.zeros_like(mag_binary)
-            combined[((mag_binary == 1) & (dir_binary == 1))] = 1
-            result_image = combined
+            result_image = combined_magn_grad
+        elif setup == "2 & 2":
+            result_image = np.zeros_like(combined_sobel)
+            result_image[((combined_sobel == 1) & (combined_magn_grad == 1))] = 1
+        elif setup == "2 | 2":
+            result_image = np.zeros_like(combined_sobel)
+            result_image[((combined_sobel == 1) | (combined_magn_grad == 1))] = 1
 
         return result_image
 
