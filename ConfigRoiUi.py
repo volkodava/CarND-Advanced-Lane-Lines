@@ -7,14 +7,23 @@ from experiments import *
 
 class RoiViewer:
     def __init__(self, search_pattern):
-        self.top_left_x = 0.4
-        self.top_left_y = 0.6
-        self.top_right_x = 0.6
-        self.top_right_y = 0.6
-        self.bottom_right_x = 1.0
-        self.bottom_right_y = 1.0
-        self.bottom_left_x = 0.1
-        self.bottom_left_y = 1.0
+        top_left_x = 0.4
+        top_left_y = 0.6
+        top_right_x = 0.6
+        top_right_y = 0.6
+        bottom_right_x = 1.0
+        bottom_right_y = 0.9
+        bottom_left_x = 0.0
+        bottom_left_y = 0.9
+
+        self.top_left_x = top_left_x
+        self.top_left_y = top_left_y
+        self.top_right_x = top_right_x
+        self.top_right_y = top_right_y
+        self.bottom_right_x = bottom_right_x
+        self.bottom_right_y = bottom_right_y
+        self.bottom_left_x = bottom_left_x
+        self.bottom_left_y = bottom_left_y
 
         plugin = Plugin(image_filter=self.image_filter, dock="right")
 
@@ -65,8 +74,8 @@ class RoiViewer:
 
         trg_top_left = (width * self.bottom_left_x, 0)
         trg_top_right = (width * self.bottom_right_x, 0)
-        trg_bottom_right = (width * self.bottom_right_x, height)
-        trg_bottom_left = (width * self.bottom_left_x, height)
+        trg_bottom_right = (width * self.bottom_right_x, height * self.bottom_right_y)
+        trg_bottom_left = (width * self.bottom_left_x, height * self.bottom_left_y)
 
         result_image = image.copy()
         if setup == "ROI Original":
