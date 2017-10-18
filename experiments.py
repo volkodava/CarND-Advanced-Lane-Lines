@@ -279,7 +279,7 @@ def apply_threshold(image):
     combined_magn_grad[((mag_binary == 1) & (dir_binary == 1))] = 1
 
     result_image = np.zeros_like(combined_sobel)
-    result_image[((combined_sobel == 1) & (combined_magn_grad == 1))] = 1
+    result_image[((combined_sobel == 1) | (combined_magn_grad == 1))] = 1
     return result_image
 
 
@@ -404,16 +404,9 @@ if __name__ == "__main__":
     #             title="Warped Image Threshold Transformation")
 
     example_warped_gray_image = apply_grayscale(example_warped_image)
-
-    gradx = abs_sobel_thresh(example_warped_gray_image, orient='x', rgb2gray=False)
-    grady = abs_sobel_thresh(example_warped_gray_image, orient='y', rgb2gray=False)
-    mag_binary = mag_thresh(example_warped_gray_image, rgb2gray=False)
-    dir_binary = dir_threshold(example_warped_gray_image, rgb2gray=False)
     combined_threshold = apply_threshold(example_warped_gray_image)
 
-    images_to_show = [example_test_image, example_warped_image, example_warped_gray_image, gradx, grady, mag_binary,
-                      dir_binary, combined_threshold]
-    labels_to_show = ["Image", "Warped Image", "Warped Gray Image", "Sobel Thresh X", "Sobel Thresh Y",
-                      "Magnitude Thresh", "Gradient Direction", "Combined Threshold"]
+    images_to_show = [example_test_image, example_warped_image, example_warped_gray_image, combined_threshold]
+    labels_to_show = ["Image", "Warped Image", "Warped Gray Image", "Combined Threshold"]
     show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
                 title="Warped Gray Image Threshold Transformation")
