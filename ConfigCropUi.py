@@ -42,7 +42,7 @@ class CropViewer:
         # NOTE: its img[y: y + h, x: x + w] and *not* img[x: x + w, y: y + h]
         result_image = None
         if setup == "Bottom":
-            result_image = crop_bottom(image, bottom_px=self.bottom_px)
+            result_image = apply_crop_bottom(image, bottom_px=self.bottom_px)
 
         return result_image
 

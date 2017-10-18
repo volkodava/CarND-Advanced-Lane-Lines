@@ -8,14 +8,10 @@ from experiments import *
 class RoiViewer:
     def __init__(self, search_pattern):
         blur_kernel_size = 1
-        top_left_x = 0.4
-        top_left_y = 0.65
-        top_right_x = 0.6
-        top_right_y = 0.65
-        bottom_right_x = 1.0
-        bottom_right_y = 1.0
-        bottom_left_x = 0.0
-        bottom_left_y = 1.0
+
+        cal_fnames = [path for path in glob.iglob('camera_cal/*.jpg', recursive=True)]
+        cal_images, cal_gray_images = read_images(cal_fnames)
+        self.objpoints, self.imgpoints, _ = get_chessboard_corners(cal_images, cal_gray_images)
 
         self.blur_kernel_size = blur_kernel_size
         self.top_left_x = top_left_x
@@ -56,7 +52,10 @@ class RoiViewer:
     def image_filter(self, image, *args, **kwargs):
         print("image: ", image.shape)
 
-        image = crop_bottom(image)
+        image = correct_distortion(image, self.objpoints, self.imgpoints)
+        print("undistorted image: ", image.shape)
+
+        image = apply_crop_bottom(image)
         print("cropped image: ", image.shape)
 
         show_orig = kwargs["show_orig"]
@@ -85,8 +84,7 @@ class RoiViewer:
         trg_bottom_right = (width * self.bottom_right_x, height * self.bottom_right_y)
         trg_bottom_left = (width * self.bottom_left_x, height * self.bottom_left_y)
 
-        grayscale_image = grayscale(image)
-        blur_image = gaussian_blur(grayscale_image, self.blur_kernel_size)
+        grayscale_image = apply_grayscale(image)
 
         result_image = image
         if setup == "ROI poly":
@@ -100,18 +98,21 @@ class RoiViewer:
             trg = np.float32([trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left])
             result_image, M = warp_image(result_image, src, trg)
         elif setup == "Final Transformation poly":
-            result_image = threshold(blur_image)
+            blur_image = gaussian_blur(grayscale_image, self.blur_kernel_size)
+            result_image = apply_threshold(blur_image)
             vertices = np.array([[src_top_left, src_top_right, src_bottom_right, src_bottom_left]], dtype=np.int32)
             cv2.polylines(result_image, [vertices], isClosed=True, color=(255, 255, 255), thickness=2)
         elif setup == "Final Transformation":
-            result_image = threshold(blur_image)
+            blur_image = gaussian_blur(grayscale_image, self.blur_kernel_size)
+            result_image = apply_threshold(blur_image)
             vertices = np.array([[trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left]], dtype=np.int32)
             cv2.polylines(result_image, [vertices], isClosed=True, color=(255, 255, 255), thickness=2)
         elif setup == "Final Transformed":
-            result_image = threshold(blur_image)
             src = np.float32([src_top_left, src_top_right, src_bottom_right, src_bottom_left])
             trg = np.float32([trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left])
-            result_image, M = warp_image(result_image, src, trg)
+            result_image, M = warp_image(grayscale_image, src, trg)
+            result_image = gaussian_blur(result_image, self.blur_kernel_size)
+            result_image = apply_threshold(result_image)
 
         return result_image
 

@@ -20,8 +20,8 @@ bottom_left_y = 1.0
 
 # Color threshold parameters
 lower_yellow_1 = 0
-lower_yellow_2 = 70
-lower_yellow_3 = 100
+lower_yellow_2 = 100
+lower_yellow_3 = 150
 upper_yellow_1 = 30
 upper_yellow_2 = 255
 upper_yellow_3 = 255
@@ -245,8 +245,8 @@ def dir_threshold(image, sobel_kernel=dir_binary_ksize, thresh=(dir_binary_thres
     return np.float32(binary_output)
 
 
-def gaussian_blur(img, kernel_size):
-    return cv2.GaussianBlur(img, (kernel_size, kernel_size), 0)
+def gaussian_blur(image, kernel_size):
+    return cv2.GaussianBlur(image, (kernel_size, kernel_size), 0)
 
 
 def moving_average(array, period):
@@ -255,10 +255,10 @@ def moving_average(array, period):
     return ret[period - 1:] / period
 
 
-def grayscale(image, lower_yellow=np.array([lower_yellow_1, lower_yellow_2, lower_yellow_3]),
-              upper_yellow=np.array([upper_yellow_1, upper_yellow_2, upper_yellow_3]),
-              lower_white=np.array([lower_white_1, lower_white_2, lower_white_3]),
-              upper_white=np.array([upper_white_1, upper_white_2, upper_white_3])):
+def apply_grayscale(image, lower_yellow=np.array([lower_yellow_1, lower_yellow_2, lower_yellow_3]),
+                    upper_yellow=np.array([upper_yellow_1, upper_yellow_2, upper_yellow_3]),
+                    lower_white=np.array([lower_white_1, lower_white_2, lower_white_3]),
+                    upper_white=np.array([upper_white_1, upper_white_2, upper_white_3])):
     yellow_image = filter_color(image, lower_yellow, upper_yellow)
     white_image = filter_color(image, lower_white, upper_white)
     combined = cv2.bitwise_or(yellow_image, white_image)
@@ -266,7 +266,7 @@ def grayscale(image, lower_yellow=np.array([lower_yellow_1, lower_yellow_2, lowe
     return np.mean(combined, axis=2)
 
 
-def threshold(image):
+def apply_threshold(image):
     gradx = abs_sobel_thresh(image, orient='x', rgb2gray=False)
     grady = abs_sobel_thresh(image, orient='y', rgb2gray=False)
     mag_binary = mag_thresh(image, rgb2gray=False)
@@ -283,9 +283,29 @@ def threshold(image):
     return result_image
 
 
-def crop_bottom(image, bottom_px=crop_bottom_px):
+def apply_crop_bottom(image, bottom_px=crop_bottom_px):
     height, width = image.shape[:2]
     return image.copy()[0:height - bottom_px, 0:width]
+
+
+def apply_warp(image):
+    height, width = image.shape[:2]
+
+    src_top_left = (width * top_left_x, height * top_left_y)
+    src_top_right = (width * top_right_x, height * top_right_y)
+    src_bottom_right = (width * bottom_right_x, height * bottom_right_y)
+    src_bottom_left = (width * bottom_left_x, height * bottom_left_y)
+
+    trg_top_left = (width * bottom_left_x, 0)
+    trg_top_right = (width * bottom_right_x, 0)
+    trg_bottom_right = (width * bottom_right_x, height * bottom_right_y)
+    trg_bottom_left = (width * bottom_left_x, height * bottom_left_y)
+
+    src = np.float32([src_top_left, src_top_right, src_bottom_right, src_bottom_left])
+    trg = np.float32([trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left])
+
+    warped_image, M = warp_image(image, src, trg)
+    return warped_image
 
 
 if __name__ == "__main__":
@@ -320,7 +340,7 @@ if __name__ == "__main__":
 
     example_undistorted_image = correct_distortion(example_test_image, objpoints, imgpoints)
 
-    example_cropped_undistorted_image = crop_bottom(example_undistorted_image)
+    example_cropped_undistorted_image = apply_crop_bottom(example_undistorted_image)
 
     images_to_show = [example_test_image, example_test_image_gray, example_undistorted_image,
                       example_cropped_undistorted_image]
@@ -341,8 +361,8 @@ if __name__ == "__main__":
 
     trg_top_left = (example_width * bottom_left_x, 0)
     trg_top_right = (example_width * bottom_right_x, 0)
-    trg_bottom_right = (example_width * bottom_right_x, example_height)
-    trg_bottom_left = (example_width * bottom_left_x, example_height)
+    trg_bottom_right = (example_width * bottom_right_x, example_height * bottom_right_y)
+    trg_bottom_left = (example_width * bottom_left_x, example_height * bottom_left_y)
 
     src_vertices = [src_top_left, src_top_right, src_bottom_right, src_bottom_left]
     trg_vertices = [trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left]
@@ -383,13 +403,13 @@ if __name__ == "__main__":
     # show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
     #             title="Warped Image Threshold Transformation")
 
-    example_warped_gray_image = grayscale(example_warped_image)
+    example_warped_gray_image = apply_grayscale(example_warped_image)
 
     gradx = abs_sobel_thresh(example_warped_gray_image, orient='x', rgb2gray=False)
     grady = abs_sobel_thresh(example_warped_gray_image, orient='y', rgb2gray=False)
     mag_binary = mag_thresh(example_warped_gray_image, rgb2gray=False)
     dir_binary = dir_threshold(example_warped_gray_image, rgb2gray=False)
-    combined_threshold = threshold(example_warped_gray_image)
+    combined_threshold = apply_threshold(example_warped_gray_image)
 
     images_to_show = [example_test_image, example_warped_image, example_warped_gray_image, gradx, grady, mag_binary,
                       dir_binary, combined_threshold]

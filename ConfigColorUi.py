@@ -7,20 +7,6 @@ from experiments import *
 
 class ColorViewer:
     def __init__(self, search_pattern):
-        lower_yellow_1 = 0
-        lower_yellow_2 = 70
-        lower_yellow_3 = 100
-        upper_yellow_1 = 30
-        upper_yellow_2 = 255
-        upper_yellow_3 = 255
-
-        lower_white_1 = 0
-        lower_white_2 = 0
-        lower_white_3 = 220
-        upper_white_1 = 255
-        upper_white_2 = 40
-        upper_white_3 = 255
-
         plugin = Plugin(image_filter=self.image_filter, dock="right")
 
         self.setup_names = ['Yellow', 'White', 'Yellow / White']
@@ -55,6 +41,12 @@ class ColorViewer:
 
     def image_filter(self, image, *args, **kwargs):
         print("image: ", image.shape)
+
+        image = apply_crop_bottom(image)
+        print("cropped image: ", image.shape)
+
+        image = apply_warp(image)
+        print("warped image: ", image.shape)
 
         show_orig = kwargs["show_orig"]
         setup = kwargs["setup"]

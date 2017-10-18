@@ -7,16 +7,6 @@ from experiments import *
 
 class ThreshViewer:
     def __init__(self, search_pattern):
-        grad_ksize = 3
-        grad_thresh_low = 20
-        grad_thresh_high = 100
-        mag_binary_ksize = 3
-        mag_binary_thresh_low = 30
-        mag_binary_thresh_high = 100
-        dir_binary_ksize = 15
-        dir_binary_thresh_low = 0.7
-        dir_binary_thresh_high = 1.3
-
         plugin = Plugin(image_filter=self.image_filter, dock="right")
 
         self.setup_names = ['Sobel Thresh X', 'Sobel Thresh Y', 'Sobel Thresh X / Y', 'Magnitude Thresh',
@@ -45,12 +35,15 @@ class ThreshViewer:
     def image_filter(self, image, *args, **kwargs):
         print("image: ", image.shape)
 
-        image = crop_bottom(image)
+        image = apply_crop_bottom(image)
         print("cropped image: ", image.shape)
 
+        image = apply_warp(image)
+        print("warped image: ", image.shape)
+
         # use grayscale based on calculated color values
-        image_gray = grayscale(image)
-        print("gray image: ", image_gray.shape)
+        image = apply_grayscale(image)
+        print("gray image: ", image.shape)
 
         show_orig = kwargs["show_orig"]
         setup = kwargs["setup"]
@@ -67,14 +60,14 @@ class ThreshViewer:
         if show_orig:
             return image
 
-        gradx = abs_sobel_thresh(image_gray, orient='x', sobel_kernel=grad_ksize,
+        gradx = abs_sobel_thresh(image, orient='x', sobel_kernel=grad_ksize,
                                  thresh=(grad_thresh_low, grad_thresh_high), rgb2gray=False)
-        grady = abs_sobel_thresh(image_gray, orient='y', sobel_kernel=grad_ksize,
+        grady = abs_sobel_thresh(image, orient='y', sobel_kernel=grad_ksize,
                                  thresh=(grad_thresh_low, grad_thresh_high), rgb2gray=False)
 
-        mag_binary = mag_thresh(image_gray, sobel_kernel=mag_binary_ksize,
+        mag_binary = mag_thresh(image, sobel_kernel=mag_binary_ksize,
                                 thresh=(mag_binary_thresh_low, mag_binary_thresh_high), rgb2gray=False)
-        dir_binary = dir_threshold(image_gray, sobel_kernel=dir_binary_ksize,
+        dir_binary = dir_threshold(image, sobel_kernel=dir_binary_ksize,
                                    thresh=(dir_binary_thresh_low, dir_binary_thresh_high), rgb2gray=False)
 
         combined_sobel = np.zeros_like(gradx)
