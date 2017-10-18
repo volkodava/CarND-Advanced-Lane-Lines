@@ -27,7 +27,8 @@ class RoiViewer:
 
         plugin = Plugin(image_filter=self.image_filter, dock="right")
 
-        self.setup_names = ['ROI Original', "ROI Transformation", 'ROI Transformed']
+        self.setup_names = ['ROI poly', "ROI Transformation", 'ROI Transformed',
+                            "Final Transformation poly", 'Final Transformation', 'Final Transformed']
 
         self.show_orig = CheckBox('show_orig', value=False, alignment='left')
 
@@ -81,13 +82,26 @@ class RoiViewer:
         trg_bottom_left = (width * self.bottom_left_x, height * self.bottom_left_y)
 
         result_image = image
-        if setup == "ROI Original":
+        if setup == "ROI poly":
             vertices = np.array([[src_top_left, src_top_right, src_bottom_right, src_bottom_left]], dtype=np.int32)
             cv2.polylines(result_image, [vertices], isClosed=True, color=(0, 255, 255), thickness=2)
         elif setup == "ROI Transformation":
             vertices = np.array([[trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left]], dtype=np.int32)
             cv2.polylines(result_image, [vertices], isClosed=True, color=(0, 255, 255), thickness=2)
         elif setup == "ROI Transformed":
+            src = np.float32([src_top_left, src_top_right, src_bottom_right, src_bottom_left])
+            trg = np.float32([trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left])
+            result_image, M = warp_image(result_image, src, trg)
+        elif setup == "Final Transformation poly":
+            result_image = threshold(grayscale(result_image))
+            vertices = np.array([[src_top_left, src_top_right, src_bottom_right, src_bottom_left]], dtype=np.int32)
+            cv2.polylines(result_image, [vertices], isClosed=True, color=(255, 255, 255), thickness=2)
+        elif setup == "Final Transformation":
+            result_image = threshold(grayscale(result_image))
+            vertices = np.array([[trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left]], dtype=np.int32)
+            cv2.polylines(result_image, [vertices], isClosed=True, color=(255, 255, 255), thickness=2)
+        elif setup == "Final Transformed":
+            result_image = threshold(grayscale(result_image))
             src = np.float32([src_top_left, src_top_right, src_bottom_right, src_bottom_left])
             trg = np.float32([trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left])
             result_image, M = warp_image(result_image, src, trg)

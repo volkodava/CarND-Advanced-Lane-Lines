@@ -266,6 +266,23 @@ def grayscale(image, lower_yellow=np.array([lower_yellow_1, lower_yellow_2, lowe
     return np.mean(combined, axis=2)
 
 
+def threshold(image):
+    gradx = abs_sobel_thresh(image, orient='x', rgb2gray=False)
+    grady = abs_sobel_thresh(image, orient='y', rgb2gray=False)
+    mag_binary = mag_thresh(image, rgb2gray=False)
+    dir_binary = dir_threshold(image, rgb2gray=False)
+
+    combined_sobel = np.zeros_like(gradx)
+    combined_sobel[((gradx == 1) & (grady == 1))] = 1
+
+    combined_magn_grad = np.zeros_like(mag_binary)
+    combined_magn_grad[((mag_binary == 1) & (dir_binary == 1))] = 1
+
+    result_image = np.zeros_like(combined_sobel)
+    result_image[((combined_sobel == 1) & (combined_magn_grad == 1))] = 1
+    return result_image
+
+
 def crop_bottom(image, bottom_px=crop_bottom_px):
     height, width = image.shape[:2]
     return image.copy()[0:height - bottom_px, 0:width]
@@ -372,10 +389,11 @@ if __name__ == "__main__":
     grady = abs_sobel_thresh(example_warped_gray_image, orient='y', rgb2gray=False)
     mag_binary = mag_thresh(example_warped_gray_image, rgb2gray=False)
     dir_binary = dir_threshold(example_warped_gray_image, rgb2gray=False)
+    combined_threshold = threshold(example_warped_gray_image)
 
     images_to_show = [example_test_image, example_warped_image, example_warped_gray_image, gradx, grady, mag_binary,
-                      dir_binary]
+                      dir_binary, combined_threshold]
     labels_to_show = ["Image", "Warped Image", "Warped Gray Image", "Sobel Thresh X", "Sobel Thresh Y",
-                      "Magnitude Thresh", "Gradient Direction"]
+                      "Magnitude Thresh", "Gradient Direction", "Combined Threshold"]
     show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
                 title="Warped Gray Image Threshold Transformation")
