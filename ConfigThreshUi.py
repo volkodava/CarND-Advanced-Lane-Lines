@@ -7,12 +7,9 @@ from experiments import *
 
 class ThreshViewer:
     def __init__(self, search_pattern):
-        gradx_ksize = 3
-        gradx_thresh_low = 20
-        gradx_thresh_high = 100
-        grady_ksize = 3
-        grady_thresh_low = 20
-        grady_thresh_high = 100
+        grad_ksize = 3
+        grad_thresh_low = 20
+        grad_thresh_high = 100
         mag_binary_ksize = 3
         mag_binary_thresh_low = 30
         mag_binary_thresh_high = 100
@@ -29,12 +26,9 @@ class ThreshViewer:
 
         plugin += self.show_orig
         plugin += ComboBox('setup', self.setup_names)
-        plugin += Slider('gradx_ksize', 0, 31, value=gradx_ksize, value_type='int')
-        plugin += Slider('gradx_thresh_low', 0, 255, value=gradx_thresh_low, value_type='int')
-        plugin += Slider('gradx_thresh_high', 0, 255, value=gradx_thresh_high, value_type='int')
-        plugin += Slider('grady_ksize', 0, 31, value=grady_ksize, value_type='int')
-        plugin += Slider('grady_thresh_low', 0, 255, value=grady_thresh_low, value_type='int')
-        plugin += Slider('grady_thresh_high', 0, 255, value=grady_thresh_high, value_type='int')
+        plugin += Slider('grad_ksize', 0, 31, value=grad_ksize, value_type='int')
+        plugin += Slider('grad_thresh_low', 0, 255, value=grad_thresh_low, value_type='int')
+        plugin += Slider('grad_thresh_high', 0, 255, value=grad_thresh_high, value_type='int')
         plugin += Slider('mag_binary_ksize', 0, 31, value=mag_binary_ksize, value_type='int')
         plugin += Slider('mag_binary_thresh_low', 0, 255, value=mag_binary_thresh_low, value_type='int')
         plugin += Slider('mag_binary_thresh_high', 0, 255, value=mag_binary_thresh_high, value_type='int')
@@ -51,18 +45,18 @@ class ThreshViewer:
     def image_filter(self, image, *args, **kwargs):
         print("image: ", image.shape)
 
+        image = crop_bottom(image)
+        print("cropped image: ", image.shape)
+
         # use grayscale based on calculated color values
         image_gray = grayscale(image)
         print("gray image: ", image_gray.shape)
 
         show_orig = kwargs["show_orig"]
         setup = kwargs["setup"]
-        gradx_ksize = kwargs["gradx_ksize"]
-        gradx_thresh_low = kwargs["gradx_thresh_low"]
-        gradx_thresh_high = kwargs["gradx_thresh_high"]
-        grady_ksize = kwargs["grady_ksize"]
-        grady_thresh_low = kwargs["grady_thresh_low"]
-        grady_thresh_high = kwargs["grady_thresh_high"]
+        grad_ksize = kwargs["grad_ksize"]
+        grad_thresh_low = kwargs["grad_thresh_low"]
+        grad_thresh_high = kwargs["grad_thresh_high"]
         mag_binary_ksize = kwargs["mag_binary_ksize"]
         mag_binary_thresh_low = kwargs["mag_binary_thresh_low"]
         mag_binary_thresh_high = kwargs["mag_binary_thresh_high"]
@@ -73,10 +67,10 @@ class ThreshViewer:
         if show_orig:
             return image
 
-        gradx = abs_sobel_thresh(image_gray, orient='x', sobel_kernel=gradx_ksize,
-                                 thresh=(gradx_thresh_low, gradx_thresh_high), rgb2gray=False)
-        grady = abs_sobel_thresh(image_gray, orient='y', sobel_kernel=grady_ksize,
-                                 thresh=(grady_thresh_low, grady_thresh_high), rgb2gray=False)
+        gradx = abs_sobel_thresh(image_gray, orient='x', sobel_kernel=grad_ksize,
+                                 thresh=(grad_thresh_low, grad_thresh_high), rgb2gray=False)
+        grady = abs_sobel_thresh(image_gray, orient='y', sobel_kernel=grad_ksize,
+                                 thresh=(grad_thresh_low, grad_thresh_high), rgb2gray=False)
 
         mag_binary = mag_thresh(image_gray, sobel_kernel=mag_binary_ksize,
                                 thresh=(mag_binary_thresh_low, mag_binary_thresh_high), rgb2gray=False)

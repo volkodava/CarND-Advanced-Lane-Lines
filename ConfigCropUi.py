@@ -38,12 +38,11 @@ class CropViewer:
         if show_orig:
             return image
 
-        height, width = image.shape[:2]
         # crop_img = img[200:400, 100:300]  # Crop from x, y, w, h -> 100, 200, 300, 400
         # NOTE: its img[y: y + h, x: x + w] and *not* img[x: x + w, y: y + h]
-        result_image = image.copy()
+        result_image = None
         if setup == "Bottom":
-            result_image = result_image[0:height - self.bottom_px, 0:width]
+            result_image = crop_bottom(image, bottom_px=self.bottom_px)
 
         return result_image
 

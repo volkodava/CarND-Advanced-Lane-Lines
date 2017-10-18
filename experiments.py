@@ -4,15 +4,48 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
+# Chessboard size
+chessboard_nx = 9
+chessboard_ny = 6
+
 # ROI polygon coefficients
 top_left_x = 0.4
-top_left_y = 0.6
+top_left_y = 0.65
 top_right_x = 0.6
-top_right_y = 0.6
+top_right_y = 0.65
 bottom_right_x = 1.0
 bottom_right_y = 1.0
-bottom_left_x = 0.1
+bottom_left_x = 0.0
 bottom_left_y = 1.0
+
+# Color threshold parameters
+lower_yellow_1 = 0
+lower_yellow_2 = 70
+lower_yellow_3 = 100
+upper_yellow_1 = 30
+upper_yellow_2 = 255
+upper_yellow_3 = 255
+
+lower_white_1 = 0
+lower_white_2 = 0
+lower_white_3 = 220
+upper_white_1 = 255
+upper_white_2 = 40
+upper_white_3 = 255
+
+# Threshold parameters
+grad_ksize = 3
+grad_thresh_low = 20
+grad_thresh_high = 100
+mag_binary_ksize = 3
+mag_binary_thresh_low = 30
+mag_binary_thresh_high = 100
+dir_binary_ksize = 15
+dir_binary_thresh_low = 0.7
+dir_binary_thresh_high = 1.3
+
+# Image crop size
+crop_bottom_px = 60
 
 
 def show_images(images, labels, cols, figsize=(16, 8), title=None):
@@ -55,7 +88,7 @@ def read_images(fnames, gray_conv=lambda rgb_image: cv2.cvtColor(rgb_image, cv2.
     return images, gray_images
 
 
-def get_chessboard_corners(images, gray_images, nx=9, ny=6):
+def get_chessboard_corners(images, gray_images, nx=chessboard_nx, ny=chessboard_ny):
     pattern_size = (nx, ny)
     upd_images = []
 
@@ -141,7 +174,8 @@ def filter_color(image, lower_color_mask, upper_color_mask=None, trg_color_space
 
 # Define a function that applies Sobel x or y,
 # then takes an absolute value and applies a threshold.
-def abs_sobel_thresh(image, sobel_kernel=3, orient='x', thresh=(0, 255), rgb2gray=True):
+def abs_sobel_thresh(image, sobel_kernel=grad_ksize, orient='x', thresh=(grad_thresh_low, grad_thresh_high),
+                     rgb2gray=True):
     # Apply the following steps to img
     # 1) Convert to grayscale
     gray = image
@@ -164,7 +198,8 @@ def abs_sobel_thresh(image, sobel_kernel=3, orient='x', thresh=(0, 255), rgb2gra
 # Define a function that applies Sobel x and y,
 # then computes the magnitude of the gradient
 # and applies a threshold
-def mag_thresh(image, sobel_kernel=3, thresh=(0, 255), rgb2gray=True):
+def mag_thresh(image, sobel_kernel=mag_binary_ksize, thresh=(mag_binary_thresh_low, mag_binary_thresh_high),
+               rgb2gray=True):
     # Apply the following steps to img
     # 1) Convert to grayscale
     gray = image
@@ -188,7 +223,8 @@ def mag_thresh(image, sobel_kernel=3, thresh=(0, 255), rgb2gray=True):
 # Define a function that applies Sobel x and y,
 # then computes the direction of the gradient
 # and applies a threshold.
-def dir_threshold(image, sobel_kernel=3, thresh=(0, np.pi / 2), rgb2gray=True):
+def dir_threshold(image, sobel_kernel=dir_binary_ksize, thresh=(dir_binary_thresh_low, dir_binary_thresh_high),
+                  rgb2gray=True):
     # Apply the following steps to img
     # 1) Convert to grayscale
     gray = image
@@ -219,13 +255,20 @@ def moving_average(array, period):
     return ret[period - 1:] / period
 
 
-def grayscale(image, lower_yellow=np.array([0, 70, 100]), upper_yellow=np.array([30, 255, 255]),
-              lower_white=np.array([0, 0, 220]), upper_white=np.array([255, 40, 255])):
+def grayscale(image, lower_yellow=np.array([lower_yellow_1, lower_yellow_2, lower_yellow_3]),
+              upper_yellow=np.array([upper_yellow_1, upper_yellow_2, upper_yellow_3]),
+              lower_white=np.array([lower_white_1, lower_white_2, lower_white_3]),
+              upper_white=np.array([upper_white_1, upper_white_2, upper_white_3])):
     yellow_image = filter_color(image, lower_yellow, upper_yellow)
     white_image = filter_color(image, lower_white, upper_white)
     combined = cv2.bitwise_or(yellow_image, white_image)
 
     return np.mean(combined, axis=2)
+
+
+def crop_bottom(image, bottom_px=crop_bottom_px):
+    height, width = image.shape[:2]
+    return image.copy()[0:height - bottom_px, 0:width]
 
 
 if __name__ == "__main__":
@@ -260,7 +303,16 @@ if __name__ == "__main__":
 
     example_undistorted_image = correct_distortion(example_test_image, objpoints, imgpoints)
 
-    example_height, example_width = example_test_image.shape[:2]
+    example_cropped_undistorted_image = crop_bottom(example_undistorted_image)
+
+    images_to_show = [example_test_image, example_test_image_gray, example_undistorted_image,
+                      example_cropped_undistorted_image]
+    labels_to_show = ["Image", "Gray Image", "Undistorted Image", "Undistorted Cropped Image"]
+    # show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
+    #             title="Input Image Transformation")
+
+    example_test_image = example_cropped_undistorted_image
+    example_height, example_width = example_cropped_undistorted_image.shape[:2]
 
     print("example image width: ", example_width)
     print("example image height: ", example_height)
@@ -284,54 +336,46 @@ if __name__ == "__main__":
     example_warped_image, M = warp_image(example_test_image, src, trg)
     example_src_masked_image = mask_image(example_test_image, poly_vertices=src_vertices)
 
-    lower_yellow = np.array([0, 70, 100])
-    upper_yellow = np.array([30, 255, 255])
+    lower_yellow = np.array([lower_yellow_1, lower_yellow_2, lower_yellow_3])
+    upper_yellow = np.array([upper_yellow_1, upper_yellow_2, upper_yellow_3])
 
     example_filtered_yellow = filter_color(example_warped_image, lower_yellow, upper_yellow)
 
-    lower_white = np.array([0, 0, 220])
-    upper_white = np.array([255, 40, 255])
+    lower_white = np.array([lower_white_1, lower_white_2, lower_white_3])
+    upper_white = np.array([upper_white_1, upper_white_2, upper_white_3])
 
     example_filtered_white = filter_color(example_warped_image, lower_white, upper_white)
 
     example_combined_filtered = cv2.bitwise_or(example_filtered_yellow, example_filtered_white)
 
-    images_to_show = [example_test_image, example_test_image_gray, example_undistorted_image, example_src_masked_image,
-                      example_warped_image, example_filtered_yellow, example_filtered_white, example_combined_filtered]
-    labels_to_show = ["Image", "Gray Image", "Undistorted Image", "Masked Image", "Warped Image", "Warped Yellow",
+    images_to_show = [example_test_image, example_src_masked_image, example_warped_image,
+                      example_filtered_yellow, example_filtered_white, example_combined_filtered]
+    labels_to_show = ["Image", "Masked Image", "Warped Image", "Warped Yellow",
                       "Warped White", "Warped Combined Colors"]
     # show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
-    #             title="Input Image Transformation")
+    #             title="Warped Input Image Color Transformation")
 
-    ksize = 3
-    gradx = abs_sobel_thresh(example_warped_image, orient='x', sobel_kernel=ksize, thresh=(20, 100))
-    grady = abs_sobel_thresh(example_warped_image, orient='y', sobel_kernel=ksize, thresh=(20, 100))
-    mag_binary = mag_thresh(example_warped_image, sobel_kernel=ksize, thresh=(30, 100))
-
-    ksize = 15
-    dir_binary = dir_threshold(example_warped_image, sobel_kernel=ksize, thresh=(0.7, 1.3))
+    gradx = abs_sobel_thresh(example_warped_image, orient='x')
+    grady = abs_sobel_thresh(example_warped_image, orient='y')
+    mag_binary = mag_thresh(example_warped_image)
+    dir_binary = dir_threshold(example_warped_image)
 
     images_to_show = [example_test_image, example_warped_image, gradx, grady, mag_binary, dir_binary]
     labels_to_show = ["Image", "Warped Image", "Sobel Thresh X", "Sobel Thresh Y", "Magnitude Thresh",
                       "Gradient Direction"]
     # show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
-    #             title="Warped Image Transformation")
+    #             title="Warped Image Threshold Transformation")
 
-    ksize = 3
     example_warped_gray_image = grayscale(example_warped_image)
 
-    gradx = abs_sobel_thresh(example_warped_gray_image, orient='x', sobel_kernel=ksize, thresh=(20, 100),
-                             rgb2gray=False)
-    grady = abs_sobel_thresh(example_warped_gray_image, orient='y', sobel_kernel=ksize, thresh=(20, 100),
-                             rgb2gray=False)
-    mag_binary = mag_thresh(example_warped_gray_image, sobel_kernel=ksize, thresh=(30, 100), rgb2gray=False)
-
-    ksize = 15
-    dir_binary = dir_threshold(example_warped_gray_image, sobel_kernel=ksize, thresh=(0.7, 1.3), rgb2gray=False)
+    gradx = abs_sobel_thresh(example_warped_gray_image, orient='x', rgb2gray=False)
+    grady = abs_sobel_thresh(example_warped_gray_image, orient='y', rgb2gray=False)
+    mag_binary = mag_thresh(example_warped_gray_image, rgb2gray=False)
+    dir_binary = dir_threshold(example_warped_gray_image, rgb2gray=False)
 
     images_to_show = [example_test_image, example_warped_image, example_warped_gray_image, gradx, grady, mag_binary,
                       dir_binary]
     labels_to_show = ["Image", "Warped Image", "Warped Gray Image", "Sobel Thresh X", "Sobel Thresh Y",
                       "Magnitude Thresh", "Gradient Direction"]
     show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
-                title="Warped Image Transformation")
+                title="Warped Gray Image Threshold Transformation")

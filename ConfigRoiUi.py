@@ -8,13 +8,13 @@ from experiments import *
 class RoiViewer:
     def __init__(self, search_pattern):
         top_left_x = 0.4
-        top_left_y = 0.6
+        top_left_y = 0.65
         top_right_x = 0.6
-        top_right_y = 0.6
+        top_right_y = 0.65
         bottom_right_x = 1.0
-        bottom_right_y = 0.9
+        bottom_right_y = 1.0
         bottom_left_x = 0.0
-        bottom_left_y = 0.9
+        bottom_left_y = 1.0
 
         self.top_left_x = top_left_x
         self.top_left_y = top_left_y
@@ -52,6 +52,9 @@ class RoiViewer:
     def image_filter(self, image, *args, **kwargs):
         print("image: ", image.shape)
 
+        image = crop_bottom(image)
+        print("cropped image: ", image.shape)
+
         show_orig = kwargs["show_orig"]
         setup = kwargs["setup"]
         self.top_left_x = kwargs["top_left_x"]
@@ -77,7 +80,7 @@ class RoiViewer:
         trg_bottom_right = (width * self.bottom_right_x, height * self.bottom_right_y)
         trg_bottom_left = (width * self.bottom_left_x, height * self.bottom_left_y)
 
-        result_image = image.copy()
+        result_image = image
         if setup == "ROI Original":
             vertices = np.array([[src_top_left, src_top_right, src_bottom_right, src_bottom_left]], dtype=np.int32)
             cv2.polylines(result_image, [vertices], isClosed=True, color=(0, 255, 255), thickness=2)
