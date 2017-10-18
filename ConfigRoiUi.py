@@ -7,6 +7,7 @@ from experiments import *
 
 class RoiViewer:
     def __init__(self, search_pattern):
+        blur_kernel_size = 1
         top_left_x = 0.4
         top_left_y = 0.65
         top_right_x = 0.6
@@ -16,6 +17,7 @@ class RoiViewer:
         bottom_left_x = 0.0
         bottom_left_y = 1.0
 
+        self.blur_kernel_size = blur_kernel_size
         self.top_left_x = top_left_x
         self.top_left_y = top_left_y
         self.top_right_x = top_right_x
@@ -34,6 +36,7 @@ class RoiViewer:
 
         plugin += self.show_orig
         plugin += ComboBox('setup', self.setup_names)
+        plugin += Slider('blur_kernel_size', 0, 31, value=self.blur_kernel_size, value_type='int')
         plugin += Slider('top_left_x', 0, 1, value=self.top_left_x)
         plugin += Slider('top_left_y', 0, 1, value=self.top_left_y)
         plugin += Slider('top_right_x', 0, 1, value=self.top_right_x)
@@ -58,6 +61,7 @@ class RoiViewer:
 
         show_orig = kwargs["show_orig"]
         setup = kwargs["setup"]
+        self.blur_kernel_size = kwargs["blur_kernel_size"]
         self.top_left_x = kwargs["top_left_x"]
         self.top_left_y = kwargs["top_left_y"]
         self.top_right_x = kwargs["top_right_x"]
@@ -81,6 +85,9 @@ class RoiViewer:
         trg_bottom_right = (width * self.bottom_right_x, height * self.bottom_right_y)
         trg_bottom_left = (width * self.bottom_left_x, height * self.bottom_left_y)
 
+        grayscale_image = grayscale(image)
+        blur_image = gaussian_blur(grayscale_image, self.blur_kernel_size)
+
         result_image = image
         if setup == "ROI poly":
             vertices = np.array([[src_top_left, src_top_right, src_bottom_right, src_bottom_left]], dtype=np.int32)
@@ -93,15 +100,15 @@ class RoiViewer:
             trg = np.float32([trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left])
             result_image, M = warp_image(result_image, src, trg)
         elif setup == "Final Transformation poly":
-            result_image = threshold(grayscale(result_image))
+            result_image = threshold(blur_image)
             vertices = np.array([[src_top_left, src_top_right, src_bottom_right, src_bottom_left]], dtype=np.int32)
             cv2.polylines(result_image, [vertices], isClosed=True, color=(255, 255, 255), thickness=2)
         elif setup == "Final Transformation":
-            result_image = threshold(grayscale(result_image))
+            result_image = threshold(blur_image)
             vertices = np.array([[trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left]], dtype=np.int32)
             cv2.polylines(result_image, [vertices], isClosed=True, color=(255, 255, 255), thickness=2)
         elif setup == "Final Transformed":
-            result_image = threshold(grayscale(result_image))
+            result_image = threshold(blur_image)
             src = np.float32([src_top_left, src_top_right, src_bottom_right, src_bottom_left])
             trg = np.float32([trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left])
             result_image, M = warp_image(result_image, src, trg)
@@ -110,6 +117,7 @@ class RoiViewer:
 
     def on_print_click(self, args):
         print("""
+        blur_kernel_size = {}
         top_left_x = {}
         top_left_y = {}
         top_right_x = {}
@@ -118,7 +126,7 @@ class RoiViewer:
         bottom_right_y = {}
         bottom_left_x = {}
         bottom_left_y = {}
-        """.format(self.top_left_x, self.top_left_y, self.top_right_x, self.top_right_y,
+        """.format(self.blur_kernel_size, self.top_left_x, self.top_left_y, self.top_right_x, self.top_right_y,
                    self.bottom_right_x, self.bottom_right_y, self.bottom_left_x, self.bottom_left_y))
 
     def show(self):
