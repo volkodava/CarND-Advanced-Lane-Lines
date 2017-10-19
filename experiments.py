@@ -1,8 +1,11 @@
 import glob
+import io
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image
+from moviepy.editor import VideoFileClip
 
 # Chessboard size
 chessboard_nx = 9
@@ -308,6 +311,89 @@ def apply_warp(image):
     return warped_image
 
 
+def grayscale_ro_rgb(grayscale):
+    return np.asarray(np.dstack((grayscale, grayscale, grayscale)), dtype=np.float32)
+
+
+def combine_images_horiz(a, b):
+    ha, wa = a.shape[:2]
+    hb, wb = b.shape[:2]
+    max_height = np.max([ha, hb])
+    total_width = wa + wb
+    new_img = np.zeros(shape=(max_height, total_width, 1), dtype=np.float32)
+
+    new_img[:ha, :wa] = a
+    new_img[:hb, wa:wa + wb] = b
+
+    return new_img
+
+
+def process_image(image):
+    pass
+
+
+def tag_video(finput, foutput, processor=process_image):
+    video_clip = VideoFileClip(finput)
+    out_clip = video_clip.fl_image(processor)
+    out_clip.write_videofile(foutput, audio=False)
+
+
+def debug_image(gray_image, num_of_bins=50):
+    height, width = gray_image.shape[:2]
+    half_image = gray_image[height // 2:, :]
+
+    bin_size = width // num_of_bins
+    mean_vertical = np.mean(half_image, axis=0)
+    mean_vertical = moving_average(mean_vertical, bin_size)
+
+    plt.subplot(2, 1, 1)
+    plt.imshow(half_image, cmap='gray')
+    plt.axis('off')
+    plt.subplot(2, 1, 2)
+    plt.plot(mean_vertical, 'b')
+    plt.xlabel('image x')
+    plt.ylabel('mean intensity')
+    plt.xlim(0, width)
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    img = Image.open(buf).convert("RGB")
+    buf.close()
+
+    return np.array(img.getdata(), np.uint8).reshape(img.size[1], img.size[0], 3)
+
+
+def combine_3_images(main, one, two):
+    height, width, depth = main.shape
+
+    result_image = np.zeros((height, width, depth), dtype=np.uint8)
+
+    right_width = width // 4
+    right_one_height = height // 2
+
+    main_size = (height, width - right_width)
+    one_size = (height - right_one_height, right_width)
+    two_size = (right_one_height, right_width)
+
+    main_coord = (0, main_size[0], 0, main_size[1])
+    one_coord = (0, one_size[0], main_size[1], main_size[1] + one_size[1])
+    two_coord = (one_size[0], one_size[0] + two_size[0],
+                 main_size[1], main_size[1] + two_size[1])
+
+    # main
+    result_image[main_coord[0]:main_coord[1], main_coord[2]:main_coord[3], :] = \
+        cv2.resize(main, (main_size[1], main_size[0]))
+    # one
+    result_image[one_coord[0]:one_coord[1], one_coord[2]:one_coord[3], :] = \
+        cv2.resize(one, (one_size[1], one_size[0]))
+    # two
+    result_image[two_coord[0]:two_coord[1], two_coord[2]:two_coord[3], :] = \
+        cv2.resize(two, (two_size[1], two_size[0]))
+
+    return result_image
+
+
 if __name__ == "__main__":
     cal_fnames = [path for path in glob.iglob('camera_cal/*.jpg', recursive=True)]
     cal_images, cal_gray_images = read_images(cal_fnames)
@@ -408,5 +494,23 @@ if __name__ == "__main__":
 
     images_to_show = [example_test_image, example_warped_image, example_warped_gray_image, combined_threshold]
     labels_to_show = ["Image", "Warped Image", "Warped Gray Image", "Combined Threshold"]
-    show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
-                title="Warped Gray Image Threshold Transformation")
+    # show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
+    #             title="Warped Gray Image Threshold Transformation")
+
+    # tag_video("project_video.mp4", "out_test_video.mp4")
+
+    main_image = example_test_image.copy()
+    main_gray_image = apply_grayscale(example_test_image)
+    main_warped_image = apply_warp(main_gray_image)
+    main_thresh_image = np.uint8(apply_threshold(main_warped_image) * 255)
+
+    # res = debug_image(main_thresh_image)
+    # plt.imshow(res)
+    # plt.show()
+
+    combined_image = combine_3_images(main_image, grayscale_ro_rgb(main_warped_image),
+                                      grayscale_ro_rgb(main_thresh_image))
+
+    plt.imshow(main_thresh_image, cmap="gray")
+    plt.imshow(combined_image)
+    plt.show()
