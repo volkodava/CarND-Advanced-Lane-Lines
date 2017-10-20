@@ -13,13 +13,13 @@ chessboard_nx = 9
 chessboard_ny = 6
 
 # ROI polygon coefficients
-top_left_x = 0.4
-top_left_y = 0.65
-top_right_x = 0.6
-top_right_y = 0.65
-bottom_right_x = 1.0
+top_left_x = 0.475
+top_left_y = 0.68
+top_right_x = 0.54
+top_right_y = 0.68
+bottom_right_x = 0.785
 bottom_right_y = 1.0
-bottom_left_x = 0.0
+bottom_left_x = 0.245
 bottom_left_y = 1.0
 
 # Color threshold parameters
@@ -533,5 +533,7 @@ if __name__ == "__main__":
     # plt.imshow(combined_image)
     # plt.show()
 
+    # tag_video("project_video.mp4", "out_test_video.mp4",
+    #           partial(process_image, objpoints=objpoints, imgpoints=imgpoints), subclip_secs=(36, 42))
     tag_video("project_video.mp4", "out_test_video.mp4",
-              partial(process_image, objpoints=objpoints, imgpoints=imgpoints), subclip_secs=(36, 42))
+              partial(process_image, objpoints=objpoints, imgpoints=imgpoints))
