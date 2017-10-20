@@ -346,8 +346,11 @@ def process_image(image, objpoints, imgpoints):
     return combined_image
 
 
-def tag_video(finput, foutput, processor):
+def tag_video(finput, foutput, processor, subclip_secs=None):
     video_clip = VideoFileClip(finput)
+    if subclip_secs is not None:
+        video_clip = video_clip.subclip(*subclip_secs)
+
     out_clip = video_clip.fl_image(processor)
     out_clip.write_videofile(foutput, audio=False)
 
@@ -531,4 +534,4 @@ if __name__ == "__main__":
     # plt.show()
 
     tag_video("project_video.mp4", "out_test_video.mp4",
-              partial(process_image, objpoints=objpoints, imgpoints=imgpoints))
+              partial(process_image, objpoints=objpoints, imgpoints=imgpoints), subclip_secs=(36, 42))
