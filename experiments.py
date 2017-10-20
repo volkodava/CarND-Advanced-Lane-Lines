@@ -1,5 +1,6 @@
 import glob
 import io
+from functools import partial
 
 import cv2
 import matplotlib.pyplot as plt
@@ -328,11 +329,24 @@ def combine_images_horiz(a, b):
     return new_img
 
 
-def process_image(image):
-    pass
+def process_image(image, objpoints, imgpoints):
+    image = correct_distortion(image, objpoints, imgpoints)
+    image = apply_crop_bottom(image)
+
+    main_gray_image = apply_grayscale(image)
+    main_warped_image = apply_warp(main_gray_image)
+    main_thresh_image = np.uint8(apply_threshold(main_warped_image) * 255)
+
+    # debug_image(main_thresh_image)
+    thresh_debug_image = debug_image(main_thresh_image)
+
+    combined_image = combine_3_images(main_image, grayscale_ro_rgb(main_warped_image),
+                                      thresh_debug_image)
+
+    return combined_image
 
 
-def tag_video(finput, foutput, processor=process_image):
+def tag_video(finput, foutput, processor):
     video_clip = VideoFileClip(finput)
     out_clip = video_clip.fl_image(processor)
     out_clip.write_videofile(foutput, audio=False)
@@ -354,12 +368,16 @@ def debug_image(gray_image, num_of_bins=50):
     plt.xlabel('image x')
     plt.ylabel('mean intensity')
     plt.xlim(0, width)
+    plt.tight_layout()
 
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
     buf.seek(0)
     img = Image.open(buf).convert("RGB")
     buf.close()
+
+    # close plot before return to stop from adding more information from outer scope
+    plt.close()
 
     return np.array(img.getdata(), np.uint8).reshape(img.size[1], img.size[0], 3)
 
@@ -497,20 +515,20 @@ if __name__ == "__main__":
     # show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
     #             title="Warped Gray Image Threshold Transformation")
 
-    # tag_video("project_video.mp4", "out_test_video.mp4")
-
     main_image = example_test_image.copy()
     main_gray_image = apply_grayscale(example_test_image)
     main_warped_image = apply_warp(main_gray_image)
     main_thresh_image = np.uint8(apply_threshold(main_warped_image) * 255)
 
-    # res = debug_image(main_thresh_image)
-    # plt.imshow(res)
-    # plt.show()
+    # debug_image(main_thresh_image)
+    thresh_debug_image = debug_image(main_thresh_image)
 
     combined_image = combine_3_images(main_image, grayscale_ro_rgb(main_warped_image),
-                                      grayscale_ro_rgb(main_thresh_image))
+                                      thresh_debug_image)
 
-    plt.imshow(main_thresh_image, cmap="gray")
-    plt.imshow(combined_image)
-    plt.show()
+    # plt.imshow(main_thresh_image, cmap="gray")
+    # plt.imshow(combined_image)
+    # plt.show()
+
+    tag_video("project_video.mp4", "out_test_video.mp4",
+              partial(process_image, objpoints=objpoints, imgpoints=imgpoints))
