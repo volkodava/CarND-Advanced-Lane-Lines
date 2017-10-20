@@ -360,16 +360,15 @@ def debug_image(gray_image, num_of_bins=50):
     half_image = gray_image[height // 2:, :]
 
     bin_size = width // num_of_bins
-    mean_vertical = np.mean(half_image, axis=0)
-    mean_vertical = moving_average(mean_vertical, bin_size)
+    avg_vertical = np.mean(half_image, axis=0)
+    avg_vertical = moving_average(avg_vertical, bin_size)
 
     plt.subplot(2, 1, 1)
     plt.imshow(half_image, cmap='gray')
     plt.axis('off')
     plt.subplot(2, 1, 2)
-    plt.plot(mean_vertical, 'b')
-    plt.xlabel('image x')
-    plt.ylabel('mean intensity')
+    plt.plot(avg_vertical, 'b')
+    plt.ylabel('# vertical pixels')
     plt.xlim(0, width)
     plt.tight_layout()
 
@@ -385,32 +384,38 @@ def debug_image(gray_image, num_of_bins=50):
     return np.array(img.getdata(), np.uint8).reshape(img.size[1], img.size[0], 3)
 
 
-def combine_3_images(main, one, two):
+def combine_3_images(main, first, second):
     height, width, depth = main.shape
 
     result_image = np.zeros((height, width, depth), dtype=np.uint8)
 
     right_width = width // 4
-    right_one_height = height // 2
+    right_height = height // 2
 
-    main_size = (height, width - right_width)
-    one_size = (height - right_one_height, right_width)
-    two_size = (right_one_height, right_width)
+    # height, width
+    main_size_height = height
+    main_size_width = width - right_width
+    first_size_height = height - right_height
+    first_size_width = right_width
+    second_size_height = right_height
+    second_size_width = right_width
 
-    main_coord = (0, main_size[0], 0, main_size[1])
-    one_coord = (0, one_size[0], main_size[1], main_size[1] + one_size[1])
-    two_coord = (one_size[0], one_size[0] + two_size[0],
-                 main_size[1], main_size[1] + two_size[1])
+    main_height_range = (0, main_size_height)
+    main_width_range = (0, main_size_width)
+    first_height_range = (0, first_size_height)
+    first_width_range = (main_size_width, main_size_width + first_size_width)
+    second_height_range = (first_size_height, first_size_height + second_size_height)
+    second_width_range = (main_size_width, main_size_width + second_size_width)
 
     # main
-    result_image[main_coord[0]:main_coord[1], main_coord[2]:main_coord[3], :] = \
-        cv2.resize(main, (main_size[1], main_size[0]))
-    # one
-    result_image[one_coord[0]:one_coord[1], one_coord[2]:one_coord[3], :] = \
-        cv2.resize(one, (one_size[1], one_size[0]))
-    # two
-    result_image[two_coord[0]:two_coord[1], two_coord[2]:two_coord[3], :] = \
-        cv2.resize(two, (two_size[1], two_size[0]))
+    result_image[main_height_range[0]:main_height_range[1], main_width_range[0]:main_width_range[1], :] = \
+        cv2.resize(main, (main_size_width, main_size_height))
+    # first
+    result_image[first_height_range[0]:first_height_range[1], first_width_range[0]:first_width_range[1], :] = \
+        cv2.resize(first, (first_size_width, first_size_height))
+    # second
+    result_image[second_height_range[0]:second_height_range[1], second_width_range[0]:second_width_range[1], :] = \
+        cv2.resize(second, (second_size_width, second_size_height))
 
     return result_image
 
@@ -529,11 +534,15 @@ if __name__ == "__main__":
     combined_image = combine_3_images(main_image, grayscale_ro_rgb(main_warped_image),
                                       thresh_debug_image)
 
-    # plt.imshow(main_thresh_image, cmap="gray")
-    # plt.imshow(combined_image)
-    # plt.show()
+    plt.imshow(main_thresh_image, cmap="gray")
+    plt.imshow(combined_image)
+    plt.show()
 
-    # tag_video("project_video.mp4", "out_test_video.mp4",
-    #           partial(process_image, objpoints=objpoints, imgpoints=imgpoints), subclip_secs=(36, 42))
-    tag_video("project_video.mp4", "out_test_video.mp4",
-              partial(process_image, objpoints=objpoints, imgpoints=imgpoints))
+    tag_video("project_video.mp4", "out_project_video.mp4",
+              partial(process_image, objpoints=objpoints, imgpoints=imgpoints), subclip_secs=(36, 42))
+    # tag_video("project_video.mp4", "out_project_video.mp4",
+    #           partial(process_image, objpoints=objpoints, imgpoints=imgpoints))
+    # tag_video("challenge_video.mp4", "out_challenge_video.mp4",
+    #           partial(process_image, objpoints=objpoints, imgpoints=imgpoints))
+    # tag_video("harder_challenge_video.mp4", "out_harder_challenge_video.mp4",
+    #           partial(process_image, objpoints=objpoints, imgpoints=imgpoints))
