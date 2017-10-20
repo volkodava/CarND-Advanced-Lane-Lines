@@ -340,7 +340,7 @@ def process_image(image, objpoints, imgpoints):
     # debug_image(main_thresh_image)
     thresh_debug_image = debug_image(main_thresh_image)
 
-    combined_image = combine_3_images(main_image, grayscale_ro_rgb(main_warped_image),
+    combined_image = combine_3_images(image, grayscale_ro_rgb(main_warped_image),
                                       thresh_debug_image)
 
     return combined_image
