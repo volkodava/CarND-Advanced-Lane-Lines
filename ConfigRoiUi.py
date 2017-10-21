@@ -96,7 +96,7 @@ class RoiViewer:
         elif setup == "ROI Transformed":
             src = np.float32([src_top_left, src_top_right, src_bottom_right, src_bottom_left])
             trg = np.float32([trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left])
-            result_image, M = warp_image(result_image, src, trg)
+            result_image, M, Minv = warp_image(result_image, src, trg)
         elif setup == "Final Transformation poly":
             blur_image = gaussian_blur(grayscale_image, self.blur_kernel_size)
             result_image = apply_threshold(blur_image)
@@ -110,7 +110,7 @@ class RoiViewer:
         elif setup == "Final Transformed":
             src = np.float32([src_top_left, src_top_right, src_bottom_right, src_bottom_left])
             trg = np.float32([trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left])
-            result_image, M = warp_image(grayscale_image, src, trg)
+            result_image, M, Minv = warp_image(grayscale_image, src, trg)
             result_image = gaussian_blur(result_image, self.blur_kernel_size)
             result_image = apply_threshold(result_image)
 

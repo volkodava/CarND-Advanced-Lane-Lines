@@ -50,6 +50,11 @@ dir_binary_thresh_high = 1.3
 # Image crop size
 crop_bottom_px = 60
 
+# Sliding Window parameters
+n_sliding_windows = 9
+window_width_margin = 100
+windows_recenter_minpix = 50
+
 
 def show_images(images, labels, cols, figsize=(16, 8), title=None):
     assert len(images) == len(labels)
@@ -141,8 +146,9 @@ def correct_distortion(image, objpoints, imgpoints):
 def warp_image(image, src, dst):
     height, width = image.shape[:2]
     M = cv2.getPerspectiveTransform(src, dst)
+    Minv = cv2.getPerspectiveTransform(dst, src)
     warped = cv2.warpPerspective(image, M, (width, height), flags=cv2.INTER_LINEAR)
-    return warped, M
+    return warped, M, Minv
 
 
 def mask_image(image, poly_vertices):
@@ -307,7 +313,7 @@ def apply_warp(image):
     src = np.float32([src_top_left, src_top_right, src_bottom_right, src_bottom_left])
     trg = np.float32([trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left])
 
-    warped_image, M = warp_image(image, src, trg)
+    warped_image, M, Minv = warp_image(image, src, trg)
     return warped_image
 
 
@@ -354,7 +360,7 @@ def tag_video(finput, foutput, processor, subclip_secs=None):
     out_clip.write_videofile(foutput, audio=False)
 
 
-def calc_avg_vertical(image, num_of_bins=50):
+def calc_moving_average_y(image, num_of_bins=50):
     height, width = image.shape[:2]
     half_image = image[height // 2:, :]
 
@@ -366,13 +372,13 @@ def calc_avg_vertical(image, num_of_bins=50):
 
 
 def debug_image(gray_image, num_of_bins=50):
-    avg_vertical, half_image = calc_avg_vertical(gray_image, num_of_bins)
+    avg_y, half_image = calc_moving_average_y(gray_image, num_of_bins)
 
     plt.subplot(2, 1, 1)
     plt.imshow(half_image, cmap='gray')
     plt.axis('off')
     plt.subplot(2, 1, 2)
-    plt.plot(avg_vertical, 'b')
+    plt.plot(avg_y, 'b')
     plt.ylabel('Counts')
     plt.ylabel('Pixel Position')
     plt.tight_layout()
@@ -425,7 +431,10 @@ def combine_3_images(main, first, second):
     return result_image
 
 
-def fit_polynomial(binary_warped, histogram):
+def find_fitpolynomial(binary_warped, histogram,
+                       n_sliding_windows=n_sliding_windows,
+                       window_width_margin=window_width_margin,
+                       windows_recenter_minpix=windows_recenter_minpix):
     # Create an output image to draw on and  visualize the result
     out_img = np.dstack((binary_warped, binary_warped, binary_warped)) * 255
     # Find the peak of the left and right halves of the histogram
@@ -434,10 +443,8 @@ def fit_polynomial(binary_warped, histogram):
     leftx_base = np.argmax(histogram[:midpoint])
     rightx_base = np.argmax(histogram[midpoint:]) + midpoint
 
-    # Choose the number of sliding windows
-    nwindows = 9
     # Set height of windows
-    window_height = np.int(binary_warped.shape[0] / nwindows)
+    window_height = np.int(binary_warped.shape[0] / n_sliding_windows)
     # Identify the x and y positions of all nonzero pixels in the image
     nonzero = binary_warped.nonzero()
     nonzeroy = np.array(nonzero[0])
@@ -445,23 +452,19 @@ def fit_polynomial(binary_warped, histogram):
     # Current positions to be updated for each window
     leftx_current = leftx_base
     rightx_current = rightx_base
-    # Set the width of the windows +/- margin
-    margin = 100
-    # Set minimum number of pixels found to recenter window
-    minpix = 50
     # Create empty lists to receive left and right lane pixel indices
     left_lane_inds = []
     right_lane_inds = []
 
     # Step through the windows one by one
-    for window in range(nwindows):
+    for window in range(n_sliding_windows):
         # Identify window boundaries in x and y (and right and left)
         win_y_low = binary_warped.shape[0] - (window + 1) * window_height
         win_y_high = binary_warped.shape[0] - window * window_height
-        win_xleft_low = leftx_current - margin
-        win_xleft_high = leftx_current + margin
-        win_xright_low = rightx_current - margin
-        win_xright_high = rightx_current + margin
+        win_xleft_low = leftx_current - window_width_margin
+        win_xleft_high = leftx_current + window_width_margin
+        win_xright_low = rightx_current - window_width_margin
+        win_xright_high = rightx_current + window_width_margin
         # Draw the windows on the visualization image
         cv2.rectangle(out_img, (win_xleft_low, win_y_low), (win_xleft_high, win_y_high),
                       (0, 255, 0), 2)
@@ -476,9 +479,9 @@ def fit_polynomial(binary_warped, histogram):
         left_lane_inds.append(good_left_inds)
         right_lane_inds.append(good_right_inds)
         # If you found > minpix pixels, recenter next window on their mean position
-        if len(good_left_inds) > minpix:
+        if len(good_left_inds) > windows_recenter_minpix:
             leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
-        if len(good_right_inds) > minpix:
+        if len(good_right_inds) > windows_recenter_minpix:
             rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
 
     # Concatenate the arrays of indices
@@ -498,7 +501,69 @@ def fit_polynomial(binary_warped, histogram):
     out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
     out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
 
-    return left_fit, right_fit, out_img
+    return (leftx, lefty, rightx, righty), (left_fit, right_fit), out_img
+
+
+def find_fitpolynomial_next(binary_warped, left_fit, right_fit,
+                            window_width_margin=window_width_margin):
+    # Assume you now have a new warped binary image
+    # from the next frame of video (also called "binary_warped")
+    # It's now much easier to find line pixels!
+    nonzero = binary_warped.nonzero()
+    nonzeroy = np.array(nonzero[0])
+    nonzerox = np.array(nonzero[1])
+    left_lane_inds = ((nonzerox > (left_fit[0] * (nonzeroy ** 2) + left_fit[1] * nonzeroy
+                                   + left_fit[2] - window_width_margin))
+                      & (nonzerox < (left_fit[0] * (nonzeroy ** 2) + left_fit[1] * nonzeroy
+                                     + left_fit[2] + window_width_margin)))
+
+    right_lane_inds = ((nonzerox > (right_fit[0] * (nonzeroy ** 2) + right_fit[1] * nonzeroy
+                                    + right_fit[2] - window_width_margin))
+                       & (nonzerox < (right_fit[0] * (nonzeroy ** 2) + right_fit[1] * nonzeroy
+                                      + right_fit[2] + window_width_margin)))
+
+    # Again, extract left and right line pixel positions
+    leftx = nonzerox[left_lane_inds]
+    lefty = nonzeroy[left_lane_inds]
+    rightx = nonzerox[right_lane_inds]
+    righty = nonzeroy[right_lane_inds]
+
+    # Fit a second order polynomial to each
+    left_fit = np.polyfit(lefty, leftx, 2)
+    right_fit = np.polyfit(righty, rightx, 2)
+
+    # Create an image to draw on and an image to show the selection window
+    out_img = np.dstack((binary_warped, binary_warped, binary_warped)) * 255
+    # Color in left and right line pixels
+    out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
+    out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
+
+    return (leftx, lefty, rightx, righty), (left_fit, right_fit), out_img
+
+
+def calculate_radius(leftx, lefty, rightx, righty, ploty):
+    # maximum y-value, corresponding to the bottom of the image
+    y_eval = np.max(ploty)
+    # Define conversions in x and y from pixels space to meters
+    # meters per pixel in y dimension
+    ym_per_pix = 30 / 720
+    # meters per pixel in x dimension
+    xm_per_pix = 3.7 / 700
+
+    left_curverad, right_curverad = (0, 0)
+
+    if len(leftx) != 0 and len(rightx) != 0:
+        # Fit new polynomials to x,y in world space
+        left_fit_cr = np.polyfit(lefty * ym_per_pix, leftx * xm_per_pix, 2)
+        right_fit_cr = np.polyfit(righty * ym_per_pix, rightx * xm_per_pix, 2)
+
+        # Calculate the new radii of curvature
+        left_curverad = ((1 + (2 * left_fit_cr[0] * y_eval * ym_per_pix
+                               + left_fit_cr[1]) ** 2) ** 1.5) / np.absolute(2 * left_fit_cr[0])
+        right_curverad = ((1 + (2 * right_fit_cr[0] * y_eval * ym_per_pix
+                                + right_fit_cr[1]) ** 2) ** 1.5) / np.absolute(2 * right_fit_cr[0])
+
+    return left_curverad, right_curverad
 
 
 if __name__ == "__main__":
@@ -563,7 +628,7 @@ if __name__ == "__main__":
     src = np.float32(src_vertices)
     trg = np.float32(trg_vertices)
 
-    example_warped_image, M = warp_image(example_test_image, src, trg)
+    example_warped_image, M, Minv = warp_image(example_test_image, src, trg)
     example_src_masked_image = mask_image(example_test_image, poly_vertices=src_vertices)
 
     lower_yellow = np.array([lower_yellow_1, lower_yellow_2, lower_yellow_3])
@@ -629,19 +694,70 @@ if __name__ == "__main__":
     #           partial(process_image, objpoints=objpoints, imgpoints=imgpoints))
 
     height, width = main_thresh_image.shape[:2]
+    ploty = np.linspace(0, height - 1, height)
 
-    avg_vertical, half_image = calc_avg_vertical(main_thresh_image)
+    # Take a histogram of the bottom half of the image
+    # histogram = np.sum(main_thresh_image[main_thresh_image.shape[0] // 2:, :], axis=0)
+    histogram, half_image = calc_moving_average_y(main_thresh_image)
 
-    left_fit, right_fit, out_img = fit_polynomial(main_thresh_image, avg_vertical)
+    (leftx, lefty, rightx, righty), (left_fit, right_fit), out_img = \
+        find_fitpolynomial(main_thresh_image, histogram)
 
     # Generate x and y values for plotting
-    ploty = np.linspace(0, main_thresh_image.shape[0] - 1, main_thresh_image.shape[0])
     left_fitx = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
     right_fitx = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
 
+    plt.close()
     plt.imshow(out_img)
     plt.plot(left_fitx, ploty, color='yellow')
     plt.plot(right_fitx, ploty, color='yellow')
     plt.xlim(0, width)
     plt.ylim(height, 0)
+    # plt.show()
+
+    left_radius, right_radius = \
+        calculate_radius(leftx, lefty, rightx, righty, ploty)
+
+    print("left_radius: ", left_radius, "m")
+    print("right_radius: ", right_radius, "m")
+
+    (leftx, lefty, rightx, righty), (left_fit, right_fit), out_img = \
+        find_fitpolynomial_next(main_thresh_image, left_fit, right_fit)
+
+    # Generate x and y values for plotting
+    left_fitx = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
+    right_fitx = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
+
+    window_img = np.zeros_like(out_img)
+
+    # Generate a polygon to illustrate the search window area
+    # And recast the x and y points into usable format for cv2.fillPoly()
+    left_line_window1 = np.array([np.transpose(np.vstack([left_fitx - window_width_margin, ploty]))])
+    left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx + window_width_margin,
+                                                                    ploty])))])
+    left_line_pts = np.hstack((left_line_window1, left_line_window2))
+    right_line_window1 = np.array([np.transpose(np.vstack([right_fitx - window_width_margin, ploty]))])
+    right_line_window2 = np.array([np.flipud(np.transpose(np.vstack([right_fitx + window_width_margin,
+                                                                     ploty])))])
+    right_line_pts = np.hstack((right_line_window1, right_line_window2))
+
+    # Draw the lane onto the warped blank image
+    cv2.fillPoly(window_img, np.int_([left_line_pts]), (0, 255, 0))
+    cv2.fillPoly(window_img, np.int_([right_line_pts]), (0, 255, 0))
+    result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
+
+    plt.close()
+    plt.imshow(result)
+    plt.plot(left_fitx, ploty, color='yellow')
+    plt.plot(right_fitx, ploty, color='yellow')
+    plt.xlim(0, width)
+    plt.ylim(height, 0)
     plt.show()
+
+    left_radius, right_radius = \
+        calculate_radius(leftx, lefty, rightx, righty, ploty)
+
+    print("left_radius: ", left_radius, "m")
+    print("right_radius: ", right_radius, "m")
+
+    # sample_code()
