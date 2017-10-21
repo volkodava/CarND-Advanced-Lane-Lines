@@ -57,7 +57,7 @@ window_width_margin = 100
 windows_recenter_minpix = 50
 
 # Video processing params
-QUEUE_LENGTH = 20
+QUEUE_LENGTH = 10
 
 
 def show_images(images, labels, cols, figsize=(16, 8), title=None):
@@ -350,6 +350,9 @@ def calc_moving_average_y(image, num_of_bins=50):
 
 
 def debug_image(thresh_gray_image, num_of_bins=50):
+    if thresh_gray_image is None:
+        return None
+
     nrows = 2
     ncols = 1
     plot_number = 1
@@ -382,6 +385,11 @@ def debug_image(thresh_gray_image, num_of_bins=50):
 
 
 def combine_3_images(main, first, second):
+    if main is None \
+            or first is None \
+            or second is None:
+        return main
+
     height, width, depth = main.shape
 
     result_image = np.zeros((height, width, depth), dtype=np.uint8)
@@ -480,9 +488,11 @@ def find_fitpolynomial(binary_warped, histogram,
     rightx = nonzerox[right_lane_inds]
     righty = nonzeroy[right_lane_inds]
 
-    # Fit a second order polynomial to each
-    left_fit = np.polyfit(lefty, leftx, 2)
-    right_fit = np.polyfit(righty, rightx, 2)
+    left_fit = right_fit = None
+    if len(leftx) > 0:
+        left_fit = np.polyfit(lefty, leftx, 2)
+    if len(rightx) > 0:
+        right_fit = np.polyfit(righty, rightx, 2)
 
     out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
     out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
@@ -527,6 +537,30 @@ def find_fitpolynomial_next(binary_warped, left_fit, right_fit,
     return (leftx, lefty, rightx, righty), (left_fit, right_fit), out_img
 
 
+def calculate_radius2(x, y, ploty):
+    # maximum y-value, corresponding to the bottom of the image
+    y_eval = np.max(ploty)
+    # Define conversions in x and y from pixels space to meters
+    # meters per pixel in y dimension
+    ym_per_pix = 30 / 720
+    # meters per pixel in x dimension
+    xm_per_pix = 3.7 / 700
+
+    curverad = 0
+
+    if x is not None and len(x) > 0 \
+            and y is not None and len(y) > 0:
+        # Fit new polynomials to x,y in world space
+        fit_cr = np.polyfit(y * ym_per_pix, x * xm_per_pix, 2)
+
+        # Calculate the new radii of curvature
+        curverad = ((1 + (2 * fit_cr[0] * y_eval * ym_per_pix
+                          + fit_cr[1]) ** 2) ** 1.5) / np.absolute(2 * fit_cr[0])
+
+    return curverad
+
+
+# TODO: remove me and adjust code
 def calculate_radius(leftx, lefty, rightx, righty, ploty):
     # maximum y-value, corresponding to the bottom of the image
     y_eval = np.max(ploty)
@@ -538,7 +572,7 @@ def calculate_radius(leftx, lefty, rightx, righty, ploty):
 
     left_curverad, right_curverad = (0, 0)
 
-    if len(leftx) != 0 and len(rightx) != 0:
+    if leftx is not None and rightx is not None:
         # Fit new polynomials to x,y in world space
         left_fit_cr = np.polyfit(lefty * ym_per_pix, leftx * xm_per_pix, 2)
         right_fit_cr = np.polyfit(righty * ym_per_pix, rightx * xm_per_pix, 2)
@@ -553,6 +587,9 @@ def calculate_radius(leftx, lefty, rightx, righty, ploty):
 
 
 def draw_lane_space(image, warped, Minv, left_fitx, right_fitx):
+    if left_fitx is None or right_fitx is None:
+        return image
+
     height, width = image.shape[:2]
 
     # Create an image to draw the lines on
@@ -612,21 +649,42 @@ class LaneProcessor:
             find_fitpolynomial(main_thresh_image, histogram)
 
         # Generate x and y values for plotting
-        left_fitx = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
-        right_fitx = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
+        left_line = right_line = None
+        if left_fit is None:
+            left_line = self.mean_value(None, self.left_lines)
+        else:
+            left_line = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
 
-        left_radius, right_radius = \
-            calculate_radius(leftx, lefty, rightx, righty, ploty)
+        if right_line is None:
+            right_line = self.mean_value(None, self.right_lines)
+        else:
+            right_line = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
 
-        left_line = self.mean_value(left_fitx, self.left_lines)
-        right_line = self.mean_value(right_fitx, self.right_lines)
+        # left_radius, right_radius = \
+        #     calculate_radius(leftx, lefty, rightx, righty, ploty)
+        left_radius = right_radius = None
+        if leftx is None or lefty is None:
+            left_radius = self.mean_value(None, self.left_rads)
+        else:
+            left_radius = calculate_radius2(leftx, lefty, ploty)
+
+        if rightx is None or righty is None:
+            right_radius = self.mean_value(None, self.right_rads)
+        else:
+            right_radius = calculate_radius2(rightx, righty, ploty)
+
+        left_line = self.mean_value(left_line, self.left_lines)
+        right_line = self.mean_value(right_line, self.right_lines)
 
         left_radius = self.mean_value(left_radius, self.left_rads)
         right_radius = self.mean_value(right_radius, self.right_rads)
 
+        if left_line is None or right_line is None:
+            return image
+
         main_lane_space_image = draw_lane_space(image, main_thresh_image, Minv, left_line, right_line)
 
-        search_area_image = get_search_area_image(out_img, left_fitx, right_fitx, ploty)
+        search_area_image = get_search_area_image(out_img, left_line, right_line, ploty)
         thresh_debug_image = debug_image(main_thresh_image)
 
         combined_image = combine_3_images(main_lane_space_image, search_area_image, thresh_debug_image)
@@ -651,6 +709,9 @@ def tag_video(finput, foutput, objpoints, imgpoints, subclip_secs=None):
 
 
 def get_search_area_image(out_img, left_fitx, right_fitx, ploty, window_width_margin=window_width_margin):
+    if left_fitx is None or right_fitx is None:
+        return None
+
     window_img = np.zeros_like(out_img)
 
     # Generate a polygon to illustrate the search window area
@@ -848,6 +909,7 @@ if __name__ == "__main__":
     plt.axis('off')
     # plt.show()
 
-    tag_video("project_video.mp4", "%s_qsize_out_project_video.mp4" % QUEUE_LENGTH, objpoints, imgpoints)
-    # tag_video("project_video.mp4", "%s_qsize_sub_out_project_video.mp4" % QUEUE_LENGTH, objpoints, imgpoints,
-    #           subclip_secs=(41, 42))
+    # tag_video("project_video.mp4", "%s_qsize_out_project_video.mp4" % QUEUE_LENGTH, objpoints, imgpoints)
+    tag_video("challenge_video.mp4", "%s_qsize_out_challenge_video.mp4" % QUEUE_LENGTH, objpoints, imgpoints)
+    # tag_video("project_video.mp4", "%s_qsize_nomean_sub_out_project_video.mp4" % QUEUE_LENGTH, objpoints, imgpoints,
+    #           subclip_secs=(10, 15))
