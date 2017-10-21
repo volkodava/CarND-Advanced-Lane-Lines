@@ -38,7 +38,7 @@ class ThreshViewer:
         image = apply_crop_bottom(image)
         print("cropped image: ", image.shape)
 
-        image = apply_warp(image)
+        image, M, Minv = apply_warp(image)
         print("warped image: ", image.shape)
 
         # use grayscale based on calculated color values

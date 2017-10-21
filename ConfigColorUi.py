@@ -45,7 +45,7 @@ class ColorViewer:
         image = apply_crop_bottom(image)
         print("cropped image: ", image.shape)
 
-        image = apply_warp(image)
+        image, M, Minv = apply_warp(image)
         print("warped image: ", image.shape)
 
         show_orig = kwargs["show_orig"]

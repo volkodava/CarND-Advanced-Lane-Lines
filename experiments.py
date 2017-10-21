@@ -1,5 +1,6 @@
 import glob
 import io
+from collections import deque
 
 import cv2
 import matplotlib.pyplot as plt
@@ -54,6 +55,9 @@ crop_bottom_px = 60
 n_sliding_windows = 9
 window_width_margin = 100
 windows_recenter_minpix = 50
+
+# Video processing params
+QUEUE_LENGTH = 20
 
 
 def show_images(images, labels, cols, figsize=(16, 8), title=None):
@@ -314,7 +318,7 @@ def apply_warp(image):
     trg = np.float32([trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left])
 
     warped_image, M, Minv = warp_image(image, src, trg)
-    return warped_image
+    return warped_image, M, Minv
 
 
 def grayscale_ro_rgb(grayscale):
@@ -334,32 +338,6 @@ def combine_images_horiz(a, b):
     return new_img
 
 
-def process_image(image, objpoints, imgpoints):
-    image = correct_distortion(image, objpoints, imgpoints)
-    image = apply_crop_bottom(image)
-
-    main_gray_image = apply_grayscale(image)
-    main_warped_image = apply_warp(main_gray_image)
-    main_thresh_image = np.uint8(apply_threshold(main_warped_image) * 255)
-
-    # debug_image(main_thresh_image)
-    thresh_debug_image = debug_image(main_thresh_image)
-
-    combined_image = combine_3_images(image, grayscale_ro_rgb(main_warped_image),
-                                      thresh_debug_image)
-
-    return combined_image
-
-
-def tag_video(finput, foutput, processor, subclip_secs=None):
-    video_clip = VideoFileClip(finput)
-    if subclip_secs is not None:
-        video_clip = video_clip.subclip(*subclip_secs)
-
-    out_clip = video_clip.fl_image(processor)
-    out_clip.write_videofile(foutput, audio=False)
-
-
 def calc_moving_average_y(image, num_of_bins=50):
     height, width = image.shape[:2]
     half_image = image[height // 2:, :]
@@ -371,16 +349,24 @@ def calc_moving_average_y(image, num_of_bins=50):
     return avg_vertical, half_image
 
 
-def debug_image(gray_image, num_of_bins=50):
-    avg_y, half_image = calc_moving_average_y(gray_image, num_of_bins)
+def debug_image(thresh_gray_image, num_of_bins=50):
+    nrows = 2
+    ncols = 1
+    plot_number = 1
 
-    plt.subplot(2, 1, 1)
+    avg_y, half_image = calc_moving_average_y(thresh_gray_image, num_of_bins)
+
+    plt.subplot(nrows, ncols, plot_number)
     plt.imshow(half_image, cmap='gray')
     plt.axis('off')
-    plt.subplot(2, 1, 2)
+    plot_number += 1
+
+    plt.subplot(nrows, ncols, plot_number)
     plt.plot(avg_y, 'b')
-    plt.ylabel('Counts')
+    plt.xlabel('Counts')
     plt.ylabel('Pixel Position')
+    plot_number += 1
+
     plt.tight_layout()
 
     buf = io.BytesIO()
@@ -589,6 +575,103 @@ def draw_lane_space(image, warped, Minv, left_fitx, right_fitx):
     return result
 
 
+class LaneProcessor:
+    def __init__(self, objpoints, imgpoints):
+        self.left_lines = deque(maxlen=QUEUE_LENGTH)
+        self.right_lines = deque(maxlen=QUEUE_LENGTH)
+        self.left_rads = deque(maxlen=QUEUE_LENGTH)
+        self.right_rads = deque(maxlen=QUEUE_LENGTH)
+
+        self.objpoints = objpoints
+        self.imgpoints = imgpoints
+
+    def mean_value(self, value, values):
+        if value is not None:
+            values.append(value)
+
+        if len(values) > 0:
+            value = np.mean(values, axis=0, dtype=np.int32)
+        return value
+
+    def process(self, image):
+        image = correct_distortion(image, self.objpoints, self.imgpoints)
+        image = apply_crop_bottom(image)
+
+        main_gray_image = apply_grayscale(image)
+        main_warped_image, M, Minv = apply_warp(main_gray_image)
+        main_thresh_image = np.uint8(apply_threshold(main_warped_image) * 255)
+
+        height, width = main_thresh_image.shape[:2]
+        ploty = np.linspace(0, height - 1, height)
+
+        # Take a histogram of the bottom half of the image
+        # histogram = np.sum(main_thresh_image[main_thresh_image.shape[0] // 2:, :], axis=0)
+        histogram, half_image = calc_moving_average_y(main_thresh_image)
+
+        (leftx, lefty, rightx, righty), (left_fit, right_fit), out_img = \
+            find_fitpolynomial(main_thresh_image, histogram)
+
+        # Generate x and y values for plotting
+        left_fitx = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
+        right_fitx = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
+
+        left_radius, right_radius = \
+            calculate_radius(leftx, lefty, rightx, righty, ploty)
+
+        left_line = self.mean_value(left_fitx, self.left_lines)
+        right_line = self.mean_value(right_fitx, self.right_lines)
+
+        left_radius = self.mean_value(left_radius, self.left_rads)
+        right_radius = self.mean_value(right_radius, self.right_rads)
+
+        main_lane_space_image = draw_lane_space(image, main_thresh_image, Minv, left_line, right_line)
+
+        search_area_image = get_search_area_image(out_img, left_fitx, right_fitx, ploty)
+        thresh_debug_image = debug_image(main_thresh_image)
+
+        combined_image = combine_3_images(main_lane_space_image, search_area_image, thresh_debug_image)
+
+        cv2.putText(combined_image, "Left radius: %s m." % left_radius, (80, 40), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                    (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
+        cv2.putText(combined_image, "Right radius: %s m." % right_radius, (80, 70), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                    (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
+
+        return combined_image
+
+
+def tag_video(finput, foutput, objpoints, imgpoints, subclip_secs=None):
+    detector = LaneProcessor(objpoints, imgpoints)
+
+    video_clip = VideoFileClip(finput)
+    if subclip_secs is not None:
+        video_clip = video_clip.subclip(*subclip_secs)
+
+    out_clip = video_clip.fl_image(detector.process)
+    out_clip.write_videofile(foutput, audio=False)
+
+
+def get_search_area_image(out_img, left_fitx, right_fitx, ploty, window_width_margin=window_width_margin):
+    window_img = np.zeros_like(out_img)
+
+    # Generate a polygon to illustrate the search window area
+    # And recast the x and y points into usable format for cv2.fillPoly()
+    left_line_window1 = np.array([np.transpose(np.vstack([left_fitx - window_width_margin, ploty]))])
+    left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx + window_width_margin,
+                                                                    ploty])))])
+    left_line_pts = np.hstack((left_line_window1, left_line_window2))
+    right_line_window1 = np.array([np.transpose(np.vstack([right_fitx - window_width_margin, ploty]))])
+    right_line_window2 = np.array([np.flipud(np.transpose(np.vstack([right_fitx + window_width_margin,
+                                                                     ploty])))])
+    right_line_pts = np.hstack((right_line_window1, right_line_window2))
+
+    # Draw the lane onto the warped blank image
+    cv2.fillPoly(window_img, np.int_([left_line_pts]), (0, 255, 0))
+    cv2.fillPoly(window_img, np.int_([right_line_pts]), (0, 255, 0))
+    result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
+
+    return result
+
+
 if __name__ == "__main__":
     cal_fnames = [path for path in glob.iglob('camera_cal/*.jpg', recursive=True)]
     cal_images, cal_gray_images = read_images(cal_fnames)
@@ -694,7 +777,7 @@ if __name__ == "__main__":
 
     main_image = example_test_image.copy()
     main_gray_image = apply_grayscale(example_test_image)
-    main_warped_image = apply_warp(main_gray_image)
+    main_warped_image, M, Minv = apply_warp(main_gray_image)
     main_thresh_image = np.uint8(apply_threshold(main_warped_image) * 255)
 
     # debug_image(main_thresh_image)
@@ -706,15 +789,6 @@ if __name__ == "__main__":
     # plt.imshow(main_thresh_image, cmap="gray")
     # plt.imshow(combined_image)
     # plt.show()
-    #
-    # tag_video("project_video.mp4", "out_project_video.mp4",
-    #           partial(process_image, objpoints=objpoints, imgpoints=imgpoints), subclip_secs=(36, 42))
-    # tag_video("project_video.mp4", "out_project_video.mp4",
-    #           partial(process_image, objpoints=objpoints, imgpoints=imgpoints))
-    # tag_video("challenge_video.mp4", "out_challenge_video.mp4",
-    #           partial(process_image, objpoints=objpoints, imgpoints=imgpoints))
-    # tag_video("harder_challenge_video.mp4", "out_harder_challenge_video.mp4",
-    #           partial(process_image, objpoints=objpoints, imgpoints=imgpoints))
 
     height, width = main_thresh_image.shape[:2]
     ploty = np.linspace(0, height - 1, height)
@@ -751,23 +825,7 @@ if __name__ == "__main__":
     left_fitx = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
     right_fitx = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
 
-    window_img = np.zeros_like(out_img)
-
-    # Generate a polygon to illustrate the search window area
-    # And recast the x and y points into usable format for cv2.fillPoly()
-    left_line_window1 = np.array([np.transpose(np.vstack([left_fitx - window_width_margin, ploty]))])
-    left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx + window_width_margin,
-                                                                    ploty])))])
-    left_line_pts = np.hstack((left_line_window1, left_line_window2))
-    right_line_window1 = np.array([np.transpose(np.vstack([right_fitx - window_width_margin, ploty]))])
-    right_line_window2 = np.array([np.flipud(np.transpose(np.vstack([right_fitx + window_width_margin,
-                                                                     ploty])))])
-    right_line_pts = np.hstack((right_line_window1, right_line_window2))
-
-    # Draw the lane onto the warped blank image
-    cv2.fillPoly(window_img, np.int_([left_line_pts]), (0, 255, 0))
-    cv2.fillPoly(window_img, np.int_([right_line_pts]), (0, 255, 0))
-    result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
+    result = get_search_area_image(out_img, left_fitx, right_fitx, ploty)
 
     plt.close()
     plt.imshow(result)
@@ -788,6 +846,8 @@ if __name__ == "__main__":
     plt.close()
     plt.imshow(main_lane_space_image)
     plt.axis('off')
-    plt.show()
+    # plt.show()
 
-    # sample_code()
+    tag_video("project_video.mp4", "%s_qsize_out_project_video.mp4" % QUEUE_LENGTH, objpoints, imgpoints)
+    # tag_video("project_video.mp4", "%s_qsize_sub_out_project_video.mp4" % QUEUE_LENGTH, objpoints, imgpoints,
+    #           subclip_secs=(41, 42))
