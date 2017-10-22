@@ -67,6 +67,7 @@ class ColorViewer:
         y = int(y + 0.5)
         pixel = self.viewer.image[y, x]
 
+        # TODO: move this value to constant
         range = 20
         lower = np.array([pixel[0] - range, pixel[1] - range, pixel[2] - range])
         upper = np.array([pixel[0] + range, pixel[1] + range, pixel[2] + range])
