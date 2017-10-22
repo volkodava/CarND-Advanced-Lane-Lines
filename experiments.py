@@ -630,6 +630,20 @@ class LaneProcessor:
             value = np.mean(values, axis=0, dtype=np.int32)
         return value
 
+    def process_simple(self, image):
+        image = correct_distortion(image, self.objpoints, self.imgpoints)
+        image = apply_crop_bottom(image)
+
+        main_gray_image = apply_grayscale(image)
+        main_warped_image, M, Minv = apply_warp(main_gray_image)
+        main_thresh_image = np.uint8(apply_threshold(main_warped_image) * 255)
+
+        thresh_debug_image = debug_image(main_thresh_image)
+
+        combined_image = combine_3_images(image, grayscale_ro_rgb(main_warped_image), thresh_debug_image)
+
+        return combined_image
+
     def process(self, image):
         image = correct_distortion(image, self.objpoints, self.imgpoints)
         image = apply_crop_bottom(image)
@@ -655,7 +669,7 @@ class LaneProcessor:
         else:
             left_line = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
 
-        if right_line is None:
+        if right_fit is None:
             right_line = self.mean_value(None, self.right_lines)
         else:
             right_line = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
@@ -697,14 +711,18 @@ class LaneProcessor:
         return combined_image
 
 
-def tag_video(finput, foutput, objpoints, imgpoints, subclip_secs=None):
+def tag_video(finput, foutput, objpoints, imgpoints, subclip_secs=None, simple=False):
     detector = LaneProcessor(objpoints, imgpoints)
 
     video_clip = VideoFileClip(finput)
     if subclip_secs is not None:
         video_clip = video_clip.subclip(*subclip_secs)
 
-    out_clip = video_clip.fl_image(detector.process)
+    out_clip = None
+    if simple:
+        out_clip = video_clip.fl_image(detector.process_simple)
+    else:
+        out_clip = video_clip.fl_image(detector.process)
     out_clip.write_videofile(foutput, audio=False)
 
 
@@ -910,6 +928,7 @@ if __name__ == "__main__":
     # plt.show()
 
     # tag_video("project_video.mp4", "%s_qsize_out_project_video.mp4" % QUEUE_LENGTH, objpoints, imgpoints)
-    tag_video("challenge_video.mp4", "%s_qsize_out_challenge_video.mp4" % QUEUE_LENGTH, objpoints, imgpoints)
+    # tag_video("challenge_video.mp4", "%s_qsize_out_challenge_video.mp4" % QUEUE_LENGTH, objpoints, imgpoints)
     # tag_video("project_video.mp4", "%s_qsize_nomean_sub_out_project_video.mp4" % QUEUE_LENGTH, objpoints, imgpoints,
     #           subclip_secs=(10, 15))
+    tag_video("challenge_video.mp4", "%s_qsize_out_challenge_video.mp4" % QUEUE_LENGTH, objpoints, imgpoints)
