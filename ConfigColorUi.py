@@ -4,6 +4,8 @@ from skimage.viewer.widgets import Slider, CheckBox, ComboBox, Button
 
 from experiments import *
 
+SENSITY_RANGE = 20
+
 lower_yellow_1 = 0
 lower_yellow_2 = 0
 lower_yellow_3 = 0
@@ -21,40 +23,54 @@ upper_white_3 = 359
 
 class ColorViewer:
     def __init__(self, search_pattern):
-        plugin = Plugin(image_filter=self.image_filter, dock="right")
+        self.plugin = Plugin(image_filter=self.image_filter, dock="right")
 
         self.setup_names = ['Yellow', 'White', 'Yellow / White']
         self.color_spaces = ['HSV', 'LAB', 'HLS']
 
         self.show_orig = CheckBox('show_orig', value=False, alignment='left')
 
-        plugin += self.show_orig
-        plugin += ComboBox('setup', self.setup_names)
-        plugin += ComboBox('color_space', self.color_spaces)
-        plugin += Slider('lower_yellow_1', 0, 359, value=lower_yellow_1, value_type='int')
-        plugin += Slider('lower_yellow_2', 0, 359, value=lower_yellow_2, value_type='int')
-        plugin += Slider('lower_yellow_3', 0, 359, value=lower_yellow_3, value_type='int')
+        self.plugin += self.show_orig
+        self.setup = ComboBox('setup', self.setup_names)
+        self.color_space = ComboBox('color_space', self.color_spaces)
+        self.lower_yellow_1 = Slider('lower_yellow_1', 0, 359, value=lower_yellow_1, value_type='int')
+        self.lower_yellow_2 = Slider('lower_yellow_2', 0, 359, value=lower_yellow_2, value_type='int')
+        self.lower_yellow_3 = Slider('lower_yellow_3', 0, 359, value=lower_yellow_3, value_type='int')
+        self.upper_yellow_1 = Slider('upper_yellow_1', 0, 359, value=upper_yellow_1, value_type='int')
+        self.upper_yellow_2 = Slider('upper_yellow_2', 0, 359, value=upper_yellow_2, value_type='int')
+        self.upper_yellow_3 = Slider('upper_yellow_3', 0, 359, value=upper_yellow_3, value_type='int')
 
-        plugin += Slider('upper_yellow_1', 0, 359, value=upper_yellow_1, value_type='int')
-        plugin += Slider('upper_yellow_2', 0, 359, value=upper_yellow_2, value_type='int')
-        plugin += Slider('upper_yellow_3', 0, 359, value=upper_yellow_3, value_type='int')
+        self.lower_white_1 = Slider('lower_white_1', 0, 359, value=lower_white_1, value_type='int')
+        self.lower_white_2 = Slider('lower_white_2', 0, 359, value=lower_white_2, value_type='int')
+        self.lower_white_3 = Slider('lower_white_3', 0, 359, value=lower_white_3, value_type='int')
+        self.upper_white_1 = Slider('upper_white_1', 0, 359, value=upper_white_1, value_type='int')
+        self.upper_white_2 = Slider('upper_white_2', 0, 359, value=upper_white_2, value_type='int')
+        self.upper_white_3 = Slider('upper_white_3', 0, 359, value=upper_white_3, value_type='int')
 
-        plugin += Slider('lower_white_1', 0, 359, value=lower_white_1, value_type='int')
-        plugin += Slider('lower_white_2', 0, 359, value=lower_white_2, value_type='int')
-        plugin += Slider('lower_white_3', 0, 359, value=lower_white_3, value_type='int')
+        self.plugin += self.setup
+        self.plugin += self.color_space
+        self.plugin += self.lower_yellow_1
+        self.plugin += self.lower_yellow_2
+        self.plugin += self.lower_yellow_3
+        self.plugin += self.upper_yellow_1
+        self.plugin += self.upper_yellow_2
+        self.plugin += self.upper_yellow_3
 
-        plugin += Slider('upper_white_1', 0, 359, value=upper_white_1, value_type='int')
-        plugin += Slider('upper_white_2', 0, 359, value=upper_white_2, value_type='int')
-        plugin += Slider('upper_white_3', 0, 359, value=upper_white_3, value_type='int')
+        self.plugin += self.lower_white_1
+        self.plugin += self.lower_white_2
+        self.plugin += self.lower_white_3
+        self.plugin += self.upper_white_1
+        self.plugin += self.upper_white_2
+        self.plugin += self.upper_white_3
 
-        plugin += Button("Reset", callback=self.on_reset_click)
+        self.plugin += Button("Reset", callback=self.on_reset_click)
 
         fnames = [path for path in glob.iglob(search_pattern, recursive=True)]
         images, gray_images = read_images(fnames)
 
         self.viewer = CollectionViewer(images)
         self.viewer.connect_event('button_press_event', self.print_color_range)
-        self.viewer += plugin
+        self.viewer += self.plugin
 
     def print_color_range(self, event):
         if event.inaxes and event.inaxes.get_navigate():
@@ -67,13 +83,28 @@ class ColorViewer:
         y = int(y + 0.5)
         pixel = self.viewer.image[y, x]
 
-        # TODO: move this value to constant
-        range = 20
-        lower = np.array([pixel[0] - range, pixel[1] - range, pixel[2] - range])
-        upper = np.array([pixel[0] + range, pixel[1] + range, pixel[2] + range])
-        self.viewer.image = cv2.inRange(self.viewer.image, lower, upper)
+        lower_lst = [pixel[0] - SENSITY_RANGE, pixel[1] - SENSITY_RANGE, pixel[2] - SENSITY_RANGE]
+        upper_lst = [pixel[0] + SENSITY_RANGE, pixel[1] + SENSITY_RANGE, pixel[2] + SENSITY_RANGE]
 
-        # TODO: update all sliders here
+        lower = np.array(lower_lst)
+        upper = np.array(upper_lst)
+
+        setup = self.setup.val
+        if setup == "Yellow":
+            self.update_yellow_params(*lower_lst, *upper_lst)
+        elif setup == "White":
+            self.update_white_params(*lower_lst, *upper_lst)
+        else:
+            print("Select only one color!")
+
+    def update_yellow_params(self, lower1, lower2, lower3, upper1, upper2, upper3):
+        lower1 = self.update_val(self.lower_yellow_1, lower1)
+        lower2 = self.update_val(self.lower_yellow_2, lower2)
+        lower3 = self.update_val(self.lower_yellow_3, lower3)
+        upper1 = self.update_val(self.upper_yellow_1, upper1)
+        upper2 = self.update_val(self.upper_yellow_2, upper2)
+        upper3 = self.update_val(self.upper_yellow_3, upper3)
+        self.plugin.filter_image()
 
         print("""
 lower_yellow_1 = {}
@@ -82,7 +113,25 @@ lower_yellow_3 = {}
 upper_yellow_1 = {}
 upper_yellow_2 = {}
 upper_yellow_3 = {}
-        """.format(lower[0], lower[1], lower[2], upper[0], upper[1], upper[2]))
+            """.format(lower1, lower2, lower3, upper1, upper2, upper3))
+
+    def update_white_params(self, lower1, lower2, lower3, upper1, upper2, upper3):
+        lower1 = self.update_val(self.lower_white_1, lower1)
+        lower2 = self.update_val(self.lower_white_2, lower2)
+        lower3 = self.update_val(self.lower_white_3, lower3)
+        upper1 = self.update_val(self.upper_white_1, upper1)
+        upper2 = self.update_val(self.upper_white_2, upper2)
+        upper3 = self.update_val(self.upper_white_3, upper3)
+        self.plugin.filter_image()
+
+        print("""
+lower_white_1 = {}
+lower_white_2 = {}
+lower_white_3 = {}
+upper_white_1 = {}
+upper_white_2 = {}
+upper_white_3 = {}
+                """.format(lower1, lower2, lower3, upper1, upper2, upper3))
 
     def image_filter(self, image, *args, **kwargs):
         print("image: ", image.shape)
@@ -138,8 +187,49 @@ upper_yellow_3 = {}
         return result_image
 
     def on_reset_click(self, args):
-        # TODO: update all sliders to its default state
-        pass
+        self.update_val(self.lower_yellow_1, lower_yellow_1)
+        self.update_val(self.lower_yellow_2, lower_yellow_2)
+        self.update_val(self.lower_yellow_3, lower_yellow_3)
+        self.update_val(self.upper_yellow_1, upper_yellow_1)
+        self.update_val(self.upper_yellow_2, upper_yellow_2)
+        self.update_val(self.upper_yellow_3, upper_yellow_3)
+
+        self.update_val(self.lower_white_1, lower_white_1)
+        self.update_val(self.lower_white_2, lower_white_2)
+        self.update_val(self.lower_white_3, lower_white_3)
+        self.update_val(self.upper_white_1, upper_white_1)
+        self.update_val(self.upper_white_2, upper_white_2)
+        self.update_val(self.upper_white_3, upper_white_3)
+
+        self.plugin.filter_image()
+        print("""
+lower_yellow_1 = {}
+lower_yellow_2 = {}
+lower_yellow_3 = {}
+upper_yellow_1 = {}
+upper_yellow_2 = {}
+upper_yellow_3 = {}
+
+lower_white_1 = {}
+lower_white_2 = {}
+lower_white_3 = {}
+upper_white_1 = {}
+upper_white_2 = {}
+upper_white_3 = {}
+            """.format(self.lower_yellow_1.val, self.lower_yellow_2.val, self.lower_yellow_3.val,
+                       self.upper_yellow_1.val, self.upper_yellow_2.val, self.upper_yellow_3.val,
+                       self.lower_white_1.val, self.lower_white_2.val, self.lower_white_3.val,
+                       self.upper_white_1.val, self.upper_white_2.val, self.upper_white_3.val
+                       ))
+
+    def update_val(self, comp, newval, min_val=0, max_val=359):
+        newval = max(0, newval)
+        newval = min(359, newval)
+
+        comp.val = newval
+        comp.editbox.setText("%s" % newval)
+
+        return newval
 
     def show(self):
         self.viewer.show()
