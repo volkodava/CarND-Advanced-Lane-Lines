@@ -56,6 +56,12 @@ n_sliding_windows = 9
 window_width_margin = 100
 windows_recenter_minpix = 50
 
+# Define conversions in x and y from pixels space to meters
+# meters per pixel in y dimension
+ym_per_pix = 30 / 720
+# meters per pixel in x dimension
+xm_per_pix = 3.7 / 700
+
 # Video processing params
 QUEUE_LENGTH = 10
 
@@ -537,15 +543,9 @@ def find_fitpolynomial_next(binary_warped, left_fit, right_fit,
     return (leftx, lefty, rightx, righty), (left_fit, right_fit), out_img
 
 
-def calculate_radius2(x, y, ploty):
+def calculate_radius(x, y, ploty, xm_per_pix=xm_per_pix, ym_per_pix=ym_per_pix):
     # maximum y-value, corresponding to the bottom of the image
     y_eval = np.max(ploty)
-    # Define conversions in x and y from pixels space to meters
-    # meters per pixel in y dimension
-    ym_per_pix = 30 / 720
-    # meters per pixel in x dimension
-    xm_per_pix = 3.7 / 700
-
     curverad = 0
 
     if x is not None and len(x) > 0 \
@@ -560,30 +560,23 @@ def calculate_radius2(x, y, ploty):
     return curverad
 
 
-# TODO: remove me and adjust code
-def calculate_radius(leftx, lefty, rightx, righty, ploty):
-    # maximum y-value, corresponding to the bottom of the image
-    y_eval = np.max(ploty)
-    # Define conversions in x and y from pixels space to meters
-    # meters per pixel in y dimension
-    ym_per_pix = 30 / 720
-    # meters per pixel in x dimension
-    xm_per_pix = 3.7 / 700
+def calculate_distance_from_center(binary_warped, left_fit, right_fit,
+                                   xm_per_pix=xm_per_pix, ym_per_pix=ym_per_pix):
+    height, width = binary_warped.shape[:2]
 
-    left_curverad, right_curverad = (0, 0)
+    center_dist = 0
 
-    if leftx is not None and rightx is not None:
-        # Fit new polynomials to x,y in world space
-        left_fit_cr = np.polyfit(lefty * ym_per_pix, leftx * xm_per_pix, 2)
-        right_fit_cr = np.polyfit(righty * ym_per_pix, rightx * xm_per_pix, 2)
+    if left_fit is not None and right_fit is not None:
+        x_center = width // 2
 
-        # Calculate the new radii of curvature
-        left_curverad = ((1 + (2 * left_fit_cr[0] * y_eval * ym_per_pix
-                               + left_fit_cr[1]) ** 2) ** 1.5) / np.absolute(2 * left_fit_cr[0])
-        right_curverad = ((1 + (2 * right_fit_cr[0] * y_eval * ym_per_pix
-                                + right_fit_cr[1]) ** 2) ** 1.5) / np.absolute(2 * right_fit_cr[0])
+        left_fitx = left_fit[0] * height ** 2 + left_fit[1] * height + left_fit[2]
+        right_fitx = right_fit[0] * height ** 2 + right_fit[1] * height + right_fit[2]
 
-    return left_curverad, right_curverad
+        lane_center = (right_fitx + left_fitx) // 2
+
+        center_dist = (x_center - lane_center) * xm_per_pix
+
+    return round(center_dist, 2)
 
 
 def draw_lane_space(image, warped, Minv, left_fitx, right_fitx):
@@ -674,18 +667,18 @@ class LaneProcessor:
         else:
             right_line = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
 
-        # left_radius, right_radius = \
-        #     calculate_radius(leftx, lefty, rightx, righty, ploty)
         left_radius = right_radius = None
         if leftx is None or lefty is None:
             left_radius = self.mean_value(None, self.left_rads)
         else:
-            left_radius = calculate_radius2(leftx, lefty, ploty)
+            left_radius = calculate_radius(leftx, lefty, ploty)
 
         if rightx is None or righty is None:
             right_radius = self.mean_value(None, self.right_rads)
         else:
-            right_radius = calculate_radius2(rightx, righty, ploty)
+            right_radius = calculate_radius(rightx, righty, ploty)
+
+        center_dist = calculate_distance_from_center(main_thresh_image, left_fit, right_fit)
 
         left_line = self.mean_value(left_line, self.left_lines)
         right_line = self.mean_value(right_line, self.right_lines)
@@ -706,6 +699,8 @@ class LaneProcessor:
         cv2.putText(combined_image, "Left radius: %s m." % left_radius, (80, 40), cv2.FONT_HERSHEY_SIMPLEX, 1,
                     (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
         cv2.putText(combined_image, "Right radius: %s m." % right_radius, (80, 70), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                    (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
+        cv2.putText(combined_image, "Center: %s m." % center_dist, (80, 100), cv2.FONT_HERSHEY_SIMPLEX, 1,
                     (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
 
         return combined_image
@@ -891,8 +886,8 @@ if __name__ == "__main__":
     plt.ylim(height, 0)
     # plt.show()
 
-    left_radius, right_radius = \
-        calculate_radius(leftx, lefty, rightx, righty, ploty)
+    left_radius = calculate_radius(leftx, lefty, ploty)
+    right_radius = calculate_radius(rightx, righty, ploty)
 
     print("left_radius: ", left_radius, "m")
     print("right_radius: ", right_radius, "m")
@@ -914,11 +909,13 @@ if __name__ == "__main__":
     plt.ylim(height, 0)
     # plt.show()
 
-    left_radius, right_radius = \
-        calculate_radius(leftx, lefty, rightx, righty, ploty)
+    left_radius = calculate_radius(leftx, lefty, ploty)
+    right_radius = calculate_radius(rightx, righty, ploty)
+    center_dist = calculate_distance_from_center(main_thresh_image, left_fit, right_fit)
 
     print("left_radius: ", left_radius, "m")
     print("right_radius: ", right_radius, "m")
+    print("distance from center: ", center_dist, "m")
 
     main_lane_space_image = draw_lane_space(main_image, main_thresh_image, Minv, left_fitx, right_fitx)
 
@@ -927,4 +924,4 @@ if __name__ == "__main__":
     plt.axis('off')
     # plt.show()
 
-    tag_video("project_video.mp4", "out_%sq_project_video.mp4" % QUEUE_LENGTH, objpoints, imgpoints)
+    tag_video("project_video.mp4", "out_project_video.mp4", objpoints, imgpoints)
