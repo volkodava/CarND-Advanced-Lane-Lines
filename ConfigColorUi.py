@@ -4,7 +4,7 @@ from skimage.viewer.widgets import Slider, CheckBox, ComboBox, Button
 
 from experiments import *
 
-SENSITY_RANGE = 20
+SENSITY_RANGE = 100
 
 lower_yellow_1 = 0
 lower_yellow_2 = 0
@@ -70,6 +70,7 @@ class ColorViewer:
 
         self.viewer = CollectionViewer(images)
         self.viewer.connect_event('button_press_event', self.print_color_range)
+        self.viewer.connect_event('key_press_event', self.on_press)
         self.viewer += self.plugin
 
     def print_color_range(self, event):
@@ -85,9 +86,6 @@ class ColorViewer:
 
         lower_lst = [pixel[0] - SENSITY_RANGE, pixel[1] - SENSITY_RANGE, pixel[2] - SENSITY_RANGE]
         upper_lst = [pixel[0] + SENSITY_RANGE, pixel[1] + SENSITY_RANGE, pixel[2] + SENSITY_RANGE]
-
-        lower = np.array(lower_lst)
-        upper = np.array(upper_lst)
 
         setup = self.setup.val
         if setup == "Yellow":
@@ -137,10 +135,10 @@ upper_white_3 = {}
         print("image: ", image.shape)
 
         image = apply_crop_bottom(image)
-        print("cropped image: ", image.shape)
+        # print("cropped image: ", image.shape)
 
         image, M, Minv = apply_warp(image)
-        print("warped image: ", image.shape)
+        # print("warped image: ", image.shape)
 
         show_orig = kwargs["show_orig"]
         setup = kwargs["setup"]
@@ -186,7 +184,11 @@ upper_white_3 = {}
 
         return result_image
 
-    def on_reset_click(self, args):
+    def on_press(self, event):
+        if event.key == 'ctrl+r':
+            self.on_reset_click()
+
+    def on_reset_click(self, args=None):
         self.update_val(self.lower_yellow_1, lower_yellow_1)
         self.update_val(self.lower_yellow_2, lower_yellow_2)
         self.update_val(self.lower_yellow_3, lower_yellow_3)
@@ -202,25 +204,6 @@ upper_white_3 = {}
         self.update_val(self.upper_white_3, upper_white_3)
 
         self.plugin.filter_image()
-        print("""
-lower_yellow_1 = {}
-lower_yellow_2 = {}
-lower_yellow_3 = {}
-upper_yellow_1 = {}
-upper_yellow_2 = {}
-upper_yellow_3 = {}
-
-lower_white_1 = {}
-lower_white_2 = {}
-lower_white_3 = {}
-upper_white_1 = {}
-upper_white_2 = {}
-upper_white_3 = {}
-            """.format(self.lower_yellow_1.val, self.lower_yellow_2.val, self.lower_yellow_3.val,
-                       self.upper_yellow_1.val, self.upper_yellow_2.val, self.upper_yellow_3.val,
-                       self.lower_white_1.val, self.lower_white_2.val, self.lower_white_3.val,
-                       self.upper_white_1.val, self.upper_white_2.val, self.upper_white_3.val
-                       ))
 
     def update_val(self, comp, newval, min_val=0, max_val=359):
         newval = max(0, newval)
