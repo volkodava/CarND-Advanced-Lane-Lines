@@ -1,8 +1,22 @@
 from skimage.viewer import CollectionViewer
 from skimage.viewer.plugins import Plugin
-from skimage.viewer.widgets import Slider, CheckBox, ComboBox
+from skimage.viewer.widgets import Slider, CheckBox, ComboBox, Button
 
 from experiments import *
+
+lower_yellow_1 = 0
+lower_yellow_2 = 0
+lower_yellow_3 = 0
+upper_yellow_1 = 359
+upper_yellow_2 = 359
+upper_yellow_3 = 359
+
+lower_white_1 = 0
+lower_white_2 = 0
+lower_white_3 = 0
+upper_white_1 = 359
+upper_white_2 = 359
+upper_white_3 = 359
 
 
 class ColorViewer:
@@ -17,27 +31,57 @@ class ColorViewer:
         plugin += self.show_orig
         plugin += ComboBox('setup', self.setup_names)
         plugin += ComboBox('color_space', self.color_spaces)
-        plugin += Slider('lower_yellow_1', 0, 255, value=lower_yellow_1, value_type='int')
-        plugin += Slider('lower_yellow_2', 0, 255, value=lower_yellow_2, value_type='int')
-        plugin += Slider('lower_yellow_3', 0, 255, value=lower_yellow_3, value_type='int')
+        plugin += Slider('lower_yellow_1', 0, 359, value=lower_yellow_1, value_type='int')
+        plugin += Slider('lower_yellow_2', 0, 359, value=lower_yellow_2, value_type='int')
+        plugin += Slider('lower_yellow_3', 0, 359, value=lower_yellow_3, value_type='int')
 
-        plugin += Slider('upper_yellow_1', 0, 255, value=upper_yellow_1, value_type='int')
-        plugin += Slider('upper_yellow_2', 0, 255, value=upper_yellow_2, value_type='int')
-        plugin += Slider('upper_yellow_3', 0, 255, value=upper_yellow_3, value_type='int')
+        plugin += Slider('upper_yellow_1', 0, 359, value=upper_yellow_1, value_type='int')
+        plugin += Slider('upper_yellow_2', 0, 359, value=upper_yellow_2, value_type='int')
+        plugin += Slider('upper_yellow_3', 0, 359, value=upper_yellow_3, value_type='int')
 
-        plugin += Slider('lower_white_1', 0, 255, value=lower_white_1, value_type='int')
-        plugin += Slider('lower_white_2', 0, 255, value=lower_white_2, value_type='int')
-        plugin += Slider('lower_white_3', 0, 255, value=lower_white_3, value_type='int')
+        plugin += Slider('lower_white_1', 0, 359, value=lower_white_1, value_type='int')
+        plugin += Slider('lower_white_2', 0, 359, value=lower_white_2, value_type='int')
+        plugin += Slider('lower_white_3', 0, 359, value=lower_white_3, value_type='int')
 
-        plugin += Slider('upper_white_1', 0, 255, value=upper_white_1, value_type='int')
-        plugin += Slider('upper_white_2', 0, 255, value=upper_white_2, value_type='int')
-        plugin += Slider('upper_white_3', 0, 255, value=upper_white_3, value_type='int')
+        plugin += Slider('upper_white_1', 0, 359, value=upper_white_1, value_type='int')
+        plugin += Slider('upper_white_2', 0, 359, value=upper_white_2, value_type='int')
+        plugin += Slider('upper_white_3', 0, 359, value=upper_white_3, value_type='int')
+
+        plugin += Button("Reset", callback=self.on_reset_click)
 
         fnames = [path for path in glob.iglob(search_pattern, recursive=True)]
         images, gray_images = read_images(fnames)
 
         self.viewer = CollectionViewer(images)
+        self.viewer.connect_event('button_press_event', self.print_color_range)
         self.viewer += plugin
+
+    def print_color_range(self, event):
+        if event.inaxes and event.inaxes.get_navigate():
+            self.viewer.status_message(self.format_coord(event.xdata, event.ydata))
+        else:
+            self.viewer.status_message('')
+
+    def format_coord(self, x, y):
+        x = int(x + 0.5)
+        y = int(y + 0.5)
+        pixel = self.viewer.image[y, x]
+
+        range = 20
+        lower = np.array([pixel[0] - range, pixel[1] - range, pixel[2] - range])
+        upper = np.array([pixel[0] + range, pixel[1] + range, pixel[2] + range])
+        self.viewer.image = cv2.inRange(self.viewer.image, lower, upper)
+
+        # TODO: update all sliders here
+
+        print("""
+lower_yellow_1 = {}
+lower_yellow_2 = {}
+lower_yellow_3 = {}
+upper_yellow_1 = {}
+upper_yellow_2 = {}
+upper_yellow_3 = {}
+        """.format(lower[0], lower[1], lower[2], upper[0], upper[1], upper[2]))
 
     def image_filter(self, image, *args, **kwargs):
         print("image: ", image.shape)
@@ -91,6 +135,10 @@ class ColorViewer:
             result_image = cv2.bitwise_or(result_yellow, result_white)
 
         return result_image
+
+    def on_reset_click(self, args):
+        # TODO: update all sliders to its default state
+        pass
 
     def show(self):
         self.viewer.show()
