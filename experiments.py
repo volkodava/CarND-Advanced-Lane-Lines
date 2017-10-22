@@ -24,18 +24,18 @@ bottom_left_y = 1.0
 
 # Color threshold parameters
 lower_yellow_1 = 0
-lower_yellow_2 = 100
+lower_yellow_2 = 60
 lower_yellow_3 = 150
-upper_yellow_1 = 30
-upper_yellow_2 = 255
-upper_yellow_3 = 255
+upper_yellow_1 = 100
+upper_yellow_2 = 220
+upper_yellow_3 = 250
 
 lower_white_1 = 0
 lower_white_2 = 0
 lower_white_3 = 220
-upper_white_1 = 255
-upper_white_2 = 40
-upper_white_3 = 255
+upper_white_1 = 80
+upper_white_2 = 20
+upper_white_3 = 300
 
 # Threshold parameters
 grad_ksize = 3

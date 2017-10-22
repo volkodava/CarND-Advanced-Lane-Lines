@@ -1,24 +1,24 @@
 from skimage.viewer import CollectionViewer
 from skimage.viewer.plugins import Plugin
-from skimage.viewer.widgets import Slider, CheckBox, ComboBox, Button
+from skimage.viewer.widgets import Slider, CheckBox, ComboBox
 
 from experiments import *
 
-SENSITY_RANGE = 100
+sensity_range = 20
 
 lower_yellow_1 = 0
-lower_yellow_2 = 0
-lower_yellow_3 = 0
-upper_yellow_1 = 359
-upper_yellow_2 = 359
-upper_yellow_3 = 359
+lower_yellow_2 = 60
+lower_yellow_3 = 150
+upper_yellow_1 = 100
+upper_yellow_2 = 220
+upper_yellow_3 = 250
 
 lower_white_1 = 0
 lower_white_2 = 0
-lower_white_3 = 0
-upper_white_1 = 359
-upper_white_2 = 359
-upper_white_3 = 359
+lower_white_3 = 220
+upper_white_1 = 80
+upper_white_2 = 20
+upper_white_3 = 300
 
 
 class ColorViewer:
@@ -33,6 +33,7 @@ class ColorViewer:
         self.plugin += self.show_orig
         self.setup = ComboBox('setup', self.setup_names)
         self.color_space = ComboBox('color_space', self.color_spaces)
+        self.sensity_range = Slider('sensity_range', 10, 100, value=sensity_range, value_type='int')
         self.lower_yellow_1 = Slider('lower_yellow_1', 0, 359, value=lower_yellow_1, value_type='int')
         self.lower_yellow_2 = Slider('lower_yellow_2', 0, 359, value=lower_yellow_2, value_type='int')
         self.lower_yellow_3 = Slider('lower_yellow_3', 0, 359, value=lower_yellow_3, value_type='int')
@@ -63,17 +64,15 @@ class ColorViewer:
         self.plugin += self.upper_white_2
         self.plugin += self.upper_white_3
 
-        self.plugin += Button("Reset", callback=self.on_reset_click)
-
         fnames = [path for path in glob.iglob(search_pattern, recursive=True)]
         images, gray_images = read_images(fnames)
 
         self.viewer = CollectionViewer(images)
-        self.viewer.connect_event('button_press_event', self.print_color_range)
+        self.viewer.connect_event('button_press_event', self.on_filter_color)
         self.viewer.connect_event('key_press_event', self.on_press)
         self.viewer += self.plugin
 
-    def print_color_range(self, event):
+    def on_filter_color(self, event):
         if event.inaxes and event.inaxes.get_navigate():
             self.viewer.status_message(self.format_coord(event.xdata, event.ydata))
         else:
@@ -84,8 +83,10 @@ class ColorViewer:
         y = int(y + 0.5)
         pixel = self.viewer.image[y, x]
 
-        lower_lst = [pixel[0] - SENSITY_RANGE, pixel[1] - SENSITY_RANGE, pixel[2] - SENSITY_RANGE]
-        upper_lst = [pixel[0] + SENSITY_RANGE, pixel[1] + SENSITY_RANGE, pixel[2] + SENSITY_RANGE]
+        lower_lst = [pixel[0] - self.sensity_range.val, pixel[1] - self.sensity_range.val,
+                     pixel[2] - self.sensity_range.val]
+        upper_lst = [pixel[0] + self.sensity_range.val, pixel[1] + self.sensity_range.val,
+                     pixel[2] + self.sensity_range.val]
 
         setup = self.setup.val
         if setup == "Yellow":
@@ -104,15 +105,6 @@ class ColorViewer:
         upper3 = self.update_val(self.upper_yellow_3, upper3)
         self.plugin.filter_image()
 
-        print("""
-lower_yellow_1 = {}
-lower_yellow_2 = {}
-lower_yellow_3 = {}
-upper_yellow_1 = {}
-upper_yellow_2 = {}
-upper_yellow_3 = {}
-            """.format(lower1, lower2, lower3, upper1, upper2, upper3))
-
     def update_white_params(self, lower1, lower2, lower3, upper1, upper2, upper3):
         lower1 = self.update_val(self.lower_white_1, lower1)
         lower2 = self.update_val(self.lower_white_2, lower2)
@@ -121,15 +113,6 @@ upper_yellow_3 = {}
         upper2 = self.update_val(self.upper_white_2, upper2)
         upper3 = self.update_val(self.upper_white_3, upper3)
         self.plugin.filter_image()
-
-        print("""
-lower_white_1 = {}
-lower_white_2 = {}
-lower_white_3 = {}
-upper_white_1 = {}
-upper_white_2 = {}
-upper_white_3 = {}
-                """.format(lower1, lower2, lower3, upper1, upper2, upper3))
 
     def image_filter(self, image, *args, **kwargs):
         print("image: ", image.shape)
@@ -186,9 +169,32 @@ upper_white_3 = {}
 
     def on_press(self, event):
         if event.key == 'ctrl+r':
-            self.on_reset_click()
+            self.on_reset()
+        elif event.key == 'ctrl+p':
+            self.on_print()
 
-    def on_reset_click(self, args=None):
+    def on_print(self, args=None):
+        print("""
+        lower_yellow_1 = {}
+        lower_yellow_2 = {}
+        lower_yellow_3 = {}
+        upper_yellow_1 = {}
+        upper_yellow_2 = {}
+        upper_yellow_3 = {}
+
+        lower_white_1 = {}
+        lower_white_2 = {}
+        lower_white_3 = {}
+        upper_white_1 = {}
+        upper_white_2 = {}
+        upper_white_3 = {}
+                    """.format(self.lower_yellow_1.val, self.lower_yellow_2.val, self.lower_yellow_3.val,
+                               self.upper_yellow_1.val, self.upper_yellow_2.val, self.upper_yellow_3.val,
+                               self.lower_white_1.val, self.lower_white_2.val, self.lower_white_3.val,
+                               self.upper_white_1.val, self.upper_white_2.val, self.upper_white_3.val
+                               ))
+
+    def on_reset(self, args=None):
         self.update_val(self.lower_yellow_1, lower_yellow_1)
         self.update_val(self.lower_yellow_2, lower_yellow_2)
         self.update_val(self.lower_yellow_3, lower_yellow_3)
