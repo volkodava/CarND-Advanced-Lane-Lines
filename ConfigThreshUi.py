@@ -41,10 +41,6 @@ class ThreshViewer:
         image, M, Minv = apply_warp(image)
         print("warped image: ", image.shape)
 
-        # use grayscale based on calculated color values
-        image = apply_grayscale(image)
-        print("gray image: ", image.shape)
-
         show_orig = kwargs["show_orig"]
         setup = kwargs["setup"]
         grad_ksize = kwargs["grad_ksize"]
@@ -58,6 +54,7 @@ class ThreshViewer:
         dir_binary_thresh_high = kwargs["dir_binary_thresh_high"]
 
         if show_orig:
+            # return apply_color_and_threshold(image) * 255
             return image
 
         gradx = abs_sobel_thresh(image, orient='x', sobel_kernel=grad_ksize,

@@ -6,19 +6,19 @@ from experiments import *
 
 sensity_range = 20
 
-lower_yellow_1 = 0
-lower_yellow_2 = 0
-lower_yellow_3 = 0
-upper_yellow_1 = 359
-upper_yellow_2 = 359
-upper_yellow_3 = 359
-
-lower_white_1 = 0
-lower_white_2 = 0
-lower_white_3 = 0
-upper_white_1 = 359
-upper_white_2 = 359
-upper_white_3 = 359
+# lower_yellow_1 = 0
+# lower_yellow_2 = 0
+# lower_yellow_3 = 0
+# upper_yellow_1 = 255
+# upper_yellow_2 = 255
+# upper_yellow_3 = 255
+#
+# lower_white_1 = 0
+# lower_white_2 = 0
+# lower_white_3 = 0
+# upper_white_1 = 255
+# upper_white_2 = 255
+# upper_white_3 = 255
 
 
 class ColorViewer:
@@ -26,7 +26,7 @@ class ColorViewer:
         self.plugin = Plugin(image_filter=self.image_filter, dock="right")
 
         self.setup_names = ['Yellow', 'White', 'Yellow / White']
-        self.color_spaces = ['HSV', 'LAB', 'HLS', 'LUV']
+        self.color_spaces = ['LAB', 'HSV', 'HLS', 'LUV']
 
         self.show_orig = CheckBox('show_orig', value=False, alignment='left')
 
@@ -34,23 +34,23 @@ class ColorViewer:
         self.setup = ComboBox('setup', self.setup_names)
         self.color_space = ComboBox('color_space', self.color_spaces)
         self.sensity_range = Slider('sensity_range', 10, 100, value=sensity_range, value_type='int')
-        self.lower_yellow_1 = Slider('lower_yellow_1', 0, 359, value=lower_yellow_1, value_type='int')
-        self.lower_yellow_2 = Slider('lower_yellow_2', 0, 359, value=lower_yellow_2, value_type='int')
-        self.lower_yellow_3 = Slider('lower_yellow_3', 0, 359, value=lower_yellow_3, value_type='int')
-        self.upper_yellow_1 = Slider('upper_yellow_1', 0, 359, value=upper_yellow_1, value_type='int')
-        self.upper_yellow_2 = Slider('upper_yellow_2', 0, 359, value=upper_yellow_2, value_type='int')
-        self.upper_yellow_3 = Slider('upper_yellow_3', 0, 359, value=upper_yellow_3, value_type='int')
+        self.lower_yellow_1 = Slider('lower_yellow_1', 0, 255, value=lower_yellow_1, value_type='int')
+        self.lower_yellow_2 = Slider('lower_yellow_2', 0, 255, value=lower_yellow_2, value_type='int')
+        self.lower_yellow_3 = Slider('lower_yellow_3', 0, 255, value=lower_yellow_3, value_type='int')
+        self.upper_yellow_1 = Slider('upper_yellow_1', 0, 255, value=upper_yellow_1, value_type='int')
+        self.upper_yellow_2 = Slider('upper_yellow_2', 0, 255, value=upper_yellow_2, value_type='int')
+        self.upper_yellow_3 = Slider('upper_yellow_3', 0, 255, value=upper_yellow_3, value_type='int')
 
-        self.lower_white_1 = Slider('lower_white_1', 0, 359, value=lower_white_1, value_type='int')
-        self.lower_white_2 = Slider('lower_white_2', 0, 359, value=lower_white_2, value_type='int')
-        self.lower_white_3 = Slider('lower_white_3', 0, 359, value=lower_white_3, value_type='int')
-        self.upper_white_1 = Slider('upper_white_1', 0, 359, value=upper_white_1, value_type='int')
-        self.upper_white_2 = Slider('upper_white_2', 0, 359, value=upper_white_2, value_type='int')
-        self.upper_white_3 = Slider('upper_white_3', 0, 359, value=upper_white_3, value_type='int')
+        self.lower_white_1 = Slider('lower_white_1', 0, 255, value=lower_white_1, value_type='int')
+        self.lower_white_2 = Slider('lower_white_2', 0, 255, value=lower_white_2, value_type='int')
+        self.lower_white_3 = Slider('lower_white_3', 0, 255, value=lower_white_3, value_type='int')
+        self.upper_white_1 = Slider('upper_white_1', 0, 255, value=upper_white_1, value_type='int')
+        self.upper_white_2 = Slider('upper_white_2', 0, 255, value=upper_white_2, value_type='int')
+        self.upper_white_3 = Slider('upper_white_3', 0, 255, value=upper_white_3, value_type='int')
 
         self.plugin += self.setup
         self.plugin += self.color_space
-        self.plugin += self.sensity_range
+        # self.plugin += self.sensity_range
         self.plugin += self.lower_yellow_1
         self.plugin += self.lower_yellow_2
         self.plugin += self.lower_yellow_3
@@ -214,9 +214,9 @@ class ColorViewer:
 
         self.plugin.filter_image()
 
-    def update_val(self, comp, newval, min_val=0, max_val=359):
+    def update_val(self, comp, newval, min_val=0, max_val=255):
         newval = max(0, newval)
-        newval = min(359, newval)
+        newval = min(255, newval)
 
         comp.val = newval
         comp.editbox.setText("%s" % newval)

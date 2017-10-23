@@ -84,8 +84,6 @@ class RoiViewer:
         trg_bottom_right = (width * self.bottom_right_x, height * self.bottom_right_y)
         trg_bottom_left = (width * self.bottom_left_x, height * self.bottom_left_y)
 
-        grayscale_image = apply_grayscale(image)
-
         result_image = image
         if setup == "ROI poly":
             vertices = np.array([[src_top_left, src_top_right, src_bottom_right, src_bottom_left]], dtype=np.int32)
@@ -98,21 +96,18 @@ class RoiViewer:
             trg = np.float32([trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left])
             result_image, M, Minv = warp_image(result_image, src, trg)
         elif setup == "Final Transformation poly":
-            blur_image = gaussian_blur(grayscale_image, self.blur_kernel_size)
-            result_image = apply_threshold(blur_image)
+            result_image = apply_color_and_threshold(image) * 255
             vertices = np.array([[src_top_left, src_top_right, src_bottom_right, src_bottom_left]], dtype=np.int32)
             cv2.polylines(result_image, [vertices], isClosed=True, color=(255, 255, 255), thickness=2)
         elif setup == "Final Transformation":
-            blur_image = gaussian_blur(grayscale_image, self.blur_kernel_size)
-            result_image = apply_threshold(blur_image)
+            result_image = apply_color_and_threshold(image) * 255
             vertices = np.array([[trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left]], dtype=np.int32)
             cv2.polylines(result_image, [vertices], isClosed=True, color=(255, 255, 255), thickness=2)
         elif setup == "Final Transformed":
             src = np.float32([src_top_left, src_top_right, src_bottom_right, src_bottom_left])
             trg = np.float32([trg_top_left, trg_top_right, trg_bottom_right, trg_bottom_left])
-            result_image, M, Minv = warp_image(grayscale_image, src, trg)
-            result_image = gaussian_blur(result_image, self.blur_kernel_size)
-            result_image = apply_threshold(result_image)
+            result_image, M, Minv = warp_image(image, src, trg)
+            result_image = apply_color_and_threshold(result_image) * 255
 
         return result_image
 

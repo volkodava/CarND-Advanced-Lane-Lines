@@ -1,5 +1,6 @@
 import glob
 import io
+import os
 from collections import deque
 
 import cv2
@@ -23,24 +24,26 @@ bottom_left_x = 0.245
 bottom_left_y = 1.0
 
 # Color threshold parameters
+color_space = cv2.COLOR_RGB2LAB
+
 lower_yellow_1 = 0
-lower_yellow_2 = 100
-lower_yellow_3 = 150
-upper_yellow_1 = 30
+lower_yellow_2 = 30
+lower_yellow_3 = 145
+upper_yellow_1 = 255
 upper_yellow_2 = 255
 upper_yellow_3 = 255
 
-lower_white_1 = 0
+lower_white_1 = 210
 lower_white_2 = 0
-lower_white_3 = 220
+lower_white_3 = 0
 upper_white_1 = 255
-upper_white_2 = 40
+upper_white_2 = 255
 upper_white_3 = 255
 
 # Threshold parameters
-grad_ksize = 3
-grad_thresh_low = 20
-grad_thresh_high = 100
+grad_ksize = 15
+grad_thresh_low = 30
+grad_thresh_high = 255
 mag_binary_ksize = 3
 mag_binary_thresh_low = 30
 mag_binary_thresh_high = 100
@@ -48,7 +51,7 @@ dir_binary_ksize = 15
 dir_binary_thresh_low = 0.7
 dir_binary_thresh_high = 1.3
 
-# Image crop size
+# crop size
 crop_bottom_px = 60
 
 # Sliding Window parameters
@@ -181,7 +184,7 @@ def mask_image(image, poly_vertices):
     return masked_image
 
 
-def filter_color(image, lower_color_mask, upper_color_mask=None, trg_color_space=cv2.COLOR_RGB2HSV):
+def filter_color(image, lower_color_mask, upper_color_mask=None, trg_color_space=color_space):
     if upper_color_mask is None:
         upper_color_mask = np.array([255, 255, 255])
 
@@ -274,32 +277,51 @@ def moving_average(array, period):
     return ret[period - 1:] / period
 
 
-def apply_grayscale(image, lower_yellow=np.array([lower_yellow_1, lower_yellow_2, lower_yellow_3]),
-                    upper_yellow=np.array([upper_yellow_1, upper_yellow_2, upper_yellow_3]),
-                    lower_white=np.array([lower_white_1, lower_white_2, lower_white_3]),
-                    upper_white=np.array([upper_white_1, upper_white_2, upper_white_3])):
+def apply_color_mask(image, lower_yellow=np.array([lower_yellow_1, lower_yellow_2, lower_yellow_3]),
+                     upper_yellow=np.array([upper_yellow_1, upper_yellow_2, upper_yellow_3]),
+                     lower_white=np.array([lower_white_1, lower_white_2, lower_white_3]),
+                     upper_white=np.array([upper_white_1, upper_white_2, upper_white_3])):
     yellow_image = filter_color(image, lower_yellow, upper_yellow)
     white_image = filter_color(image, lower_white, upper_white)
     combined = cv2.bitwise_or(yellow_image, white_image)
 
-    return np.mean(combined, axis=2)
+    combined_gray = np.mean(combined, axis=2)
+
+    result_image = np.zeros_like(combined_gray, dtype=np.uint8)
+    result_image[combined_gray > 0] = 1
+
+    return result_image
 
 
 def apply_threshold(image):
     gradx = abs_sobel_thresh(image, orient='x', rgb2gray=False)
-    grady = abs_sobel_thresh(image, orient='y', rgb2gray=False)
-    mag_binary = mag_thresh(image, rgb2gray=False)
-    dir_binary = dir_threshold(image, rgb2gray=False)
+    # grady = abs_sobel_thresh(image, orient='y', rgb2gray=False)
+    # mag_binary = mag_thresh(image, rgb2gray=False)
+    # dir_binary = dir_threshold(image, rgb2gray=False)
+    #
+    # combined_sobel = np.zeros_like(gradx)
+    # combined_sobel[((gradx == 1) & (grady == 1))] = 1
+    #
+    # combined_magn_grad = np.zeros_like(mag_binary)
+    # combined_magn_grad[((mag_binary == 1) & (dir_binary == 1))] = 1
+    #
+    # result_image = np.zeros_like(combined_sobel)
+    # result_image[((combined_sobel == 1) | (combined_magn_grad == 1))] = 1
 
-    combined_sobel = np.zeros_like(gradx)
-    combined_sobel[((gradx == 1) & (grady == 1))] = 1
+    gradx_gray = np.mean(gradx, axis=2)
 
-    combined_magn_grad = np.zeros_like(mag_binary)
-    combined_magn_grad[((mag_binary == 1) & (dir_binary == 1))] = 1
+    result_image = np.zeros_like(gradx_gray, dtype=np.uint8)
+    result_image[gradx_gray > 0] = 1
 
-    result_image = np.zeros_like(combined_sobel)
-    result_image[((combined_sobel == 1) | (combined_magn_grad == 1))] = 1
     return result_image
+
+
+def apply_color_and_threshold(input):
+    color_wb_image = apply_color_mask(input)
+    threshold_wb_image = apply_threshold(input)
+    combined_wb_image = np.bitwise_and(color_wb_image, threshold_wb_image)
+
+    return combined_wb_image
 
 
 def apply_crop_bottom(image, bottom_px=crop_bottom_px):
@@ -627,13 +649,12 @@ class LaneProcessor:
         image = correct_distortion(image, self.objpoints, self.imgpoints)
         image = apply_crop_bottom(image)
 
-        main_gray_image = apply_grayscale(image)
-        main_warped_image, M, Minv = apply_warp(main_gray_image)
-        main_thresh_image = np.uint8(apply_threshold(main_warped_image) * 255)
+        main_warped_image, M, Minv = apply_warp(image)
+        main_thresh_image = np.uint8(apply_color_and_threshold(main_warped_image) * 255)
 
         thresh_debug_image = debug_image(main_thresh_image)
 
-        combined_image = combine_3_images(image, grayscale_ro_rgb(main_warped_image), thresh_debug_image)
+        combined_image = combine_3_images(image, main_warped_image, thresh_debug_image)
 
         return combined_image
 
@@ -641,9 +662,8 @@ class LaneProcessor:
         image = correct_distortion(image, self.objpoints, self.imgpoints)
         image = apply_crop_bottom(image)
 
-        main_gray_image = apply_grayscale(image)
-        main_warped_image, M, Minv = apply_warp(main_gray_image)
-        main_thresh_image = np.uint8(apply_threshold(main_warped_image) * 255)
+        main_warped_image, M, Minv = apply_warp(image)
+        main_thresh_image = np.uint8(apply_color_and_threshold(main_warped_image) * 255)
 
         height, width = main_thresh_image.shape[:2]
         ploty = np.linspace(0, height - 1, height)
@@ -703,6 +723,10 @@ class LaneProcessor:
         cv2.putText(combined_image, "Center: %s m." % center_dist, (80, 100), cv2.FONT_HERSHEY_SIMPLEX, 1,
                     (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
 
+        # for debug purposes
+        cv2.imwrite(os.path.join('output_images', 'sample_out_2.png'),
+                    cv2.cvtColor(combined_image, cv2.COLOR_RGB2BGR))
+
         return combined_image
 
 
@@ -758,7 +782,7 @@ if __name__ == "__main__":
     cal_undistorted_image = correct_distortion(cal_test_image, objpoints, imgpoints)
 
     # images_to_show = [cal_test_image, cal_test_image_gray, cal_undistorted_image]
-    # labels_to_show = ["Image", "Gray Image", "Undistorted Image"]
+    # labels_to_show = ["Input", "Gray", "Undistorted"]
     # show_images(images_to_show, labels_to_show, cols=len(images_to_show), title="Calibrate Camera")
 
     print("num of camera calibration images: ", len(cal_images))
@@ -768,23 +792,21 @@ if __name__ == "__main__":
     example_fnames = ["test_images/test4.jpg", "test_images/test5.jpg"]
     example_images, example_gray_images = read_images(example_fnames)
 
-    # show_images(example_images, labels=example_fnames, cols=len(example_images), title="Input Images")
+    # show_images(example_images, labels=example_fnames, cols=len(example_images), title="Input")
     # show_images(example_gray_images, labels=example_fnames, cols=len(example_gray_images),
-    #             title="Input Gray Images")
+    #             title="Input Gray")
 
     example_selected_idx = 0
     example_test_image = example_images[example_selected_idx]
-    example_test_image_gray = example_gray_images[example_selected_idx]
 
     example_undistorted_image = correct_distortion(example_test_image, objpoints, imgpoints)
 
     example_cropped_undistorted_image = apply_crop_bottom(example_undistorted_image)
 
-    images_to_show = [example_test_image, example_test_image_gray, example_undistorted_image,
-                      example_cropped_undistorted_image]
-    labels_to_show = ["Image", "Gray Image", "Undistorted Image", "Undistorted Cropped Image"]
+    images_to_show = [example_test_image, example_undistorted_image, example_cropped_undistorted_image]
+    labels_to_show = ["Input", "Undistorted", "Undistorted Cropped"]
     # show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
-    #             title="Input Image Transformation")
+    #             title="Input Transformation")
 
     example_test_image = example_cropped_undistorted_image
     example_height, example_width = example_cropped_undistorted_image.shape[:2]
@@ -825,10 +847,10 @@ if __name__ == "__main__":
 
     images_to_show = [example_test_image, example_src_masked_image, example_warped_image,
                       example_filtered_yellow, example_filtered_white, example_combined_filtered]
-    labels_to_show = ["Image", "Masked Image", "Warped Image", "Warped Yellow",
+    labels_to_show = ["Input", "Masked", "Warped", "Warped Yellow",
                       "Warped White", "Warped Combined Colors"]
     # show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
-    #             title="Warped Input Image Color Transformation")
+    #             title="Warped Input Color Transformation")
 
     gradx = abs_sobel_thresh(example_warped_image, orient='x')
     grady = abs_sobel_thresh(example_warped_image, orient='y')
@@ -836,30 +858,26 @@ if __name__ == "__main__":
     dir_binary = dir_threshold(example_warped_image)
 
     images_to_show = [example_test_image, example_warped_image, gradx, grady, mag_binary, dir_binary]
-    labels_to_show = ["Image", "Warped Image", "Sobel Thresh X", "Sobel Thresh Y", "Magnitude Thresh",
+    labels_to_show = ["Input", "Warped", "Sobel Thresh X", "Sobel Thresh Y", "Magnitude Thresh",
                       "Gradient Direction"]
     # show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
-    #             title="Warped Image Threshold Transformation")
+    #             title="Warped Threshold Transformation")
 
-    example_warped_gray_image = apply_grayscale(example_warped_image)
-    combined_threshold = apply_threshold(example_warped_gray_image)
+    example_warped_wb_image = apply_color_mask(example_warped_image)
+    example_threshold_wb_image = apply_threshold(example_warped_image)
+    example_combined_image = np.bitwise_and(example_warped_wb_image, example_threshold_wb_image)
 
-    images_to_show = [example_test_image, example_warped_image, example_warped_gray_image, combined_threshold]
-    labels_to_show = ["Image", "Warped Image", "Warped Gray Image", "Combined Threshold"]
+    images_to_show = [example_test_image, example_warped_image, example_warped_wb_image, example_threshold_wb_image,
+                      example_combined_image]
+    labels_to_show = ["Input", "Warped", "Warped W/B", "Warped Threshold W/B", "Combined W/B"]
     # show_images(images_to_show, labels=labels_to_show, cols=len(images_to_show) // 2,
-    #             title="Warped Gray Image Threshold Transformation")
+    #             title="Warped Gray Threshold Transformation")
 
-    main_image = example_test_image.copy()
-    main_gray_image = apply_grayscale(example_test_image)
-    main_warped_image, M, Minv = apply_warp(main_gray_image)
-    main_thresh_image = np.uint8(apply_threshold(main_warped_image) * 255)
+    main_warped_image, M, Minv = apply_warp(example_test_image)
+    main_thresh_image = np.uint8(apply_color_and_threshold(main_warped_image) * 255)
 
-    # debug_image(main_thresh_image)
     # thresh_debug_image = debug_image(main_thresh_image)
-    #
-    # combined_image = combine_3_images(main_image, grayscale_ro_rgb(main_warped_image),
-    #                                   thresh_debug_image)
-    #
+    # combined_image = combine_3_images(example_test_image, main_warped_image, thresh_debug_image)
     # plt.imshow(main_thresh_image, cmap="gray")
     # plt.imshow(combined_image)
     # plt.show()
@@ -917,11 +935,11 @@ if __name__ == "__main__":
     print("right_radius: ", right_radius, "m")
     print("distance from center: ", center_dist, "m")
 
-    main_lane_space_image = draw_lane_space(main_image, main_thresh_image, Minv, left_fitx, right_fitx)
+    main_lane_space_image = draw_lane_space(example_test_image, main_thresh_image, Minv, left_fitx, right_fitx)
 
     plt.close()
     plt.imshow(main_lane_space_image)
     plt.axis('off')
     # plt.show()
 
-    tag_video("project_video.mp4", "out_project_video.mp4", objpoints, imgpoints)
+    tag_video("project_video.mp4", "out_new_project_video.mp4", objpoints, imgpoints)
