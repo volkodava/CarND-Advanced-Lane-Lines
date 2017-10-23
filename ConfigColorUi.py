@@ -7,18 +7,18 @@ from experiments import *
 sensity_range = 20
 
 lower_yellow_1 = 0
-lower_yellow_2 = 60
-lower_yellow_3 = 150
-upper_yellow_1 = 100
-upper_yellow_2 = 220
-upper_yellow_3 = 250
+lower_yellow_2 = 0
+lower_yellow_3 = 0
+upper_yellow_1 = 359
+upper_yellow_2 = 359
+upper_yellow_3 = 359
 
 lower_white_1 = 0
 lower_white_2 = 0
-lower_white_3 = 220
-upper_white_1 = 80
-upper_white_2 = 20
-upper_white_3 = 300
+lower_white_3 = 0
+upper_white_1 = 359
+upper_white_2 = 359
+upper_white_3 = 359
 
 
 class ColorViewer:
@@ -26,7 +26,7 @@ class ColorViewer:
         self.plugin = Plugin(image_filter=self.image_filter, dock="right")
 
         self.setup_names = ['Yellow', 'White', 'Yellow / White']
-        self.color_spaces = ['HSV', 'LAB', 'HLS']
+        self.color_spaces = ['HSV', 'LAB', 'HLS', 'LUV']
 
         self.show_orig = CheckBox('show_orig', value=False, alignment='left')
 
@@ -50,6 +50,7 @@ class ColorViewer:
 
         self.plugin += self.setup
         self.plugin += self.color_space
+        self.plugin += self.sensity_range
         self.plugin += self.lower_yellow_1
         self.plugin += self.lower_yellow_2
         self.plugin += self.lower_yellow_3
@@ -154,6 +155,8 @@ class ColorViewer:
             target_color_space = cv2.COLOR_RGB2Lab
         elif color_space == "HLS":
             target_color_space = cv2.COLOR_RGB2HLS
+        elif color_space == "LUV":
+            target_color_space = cv2.COLOR_RGB2LUV
 
         result_image = None
         if setup == "Yellow":
