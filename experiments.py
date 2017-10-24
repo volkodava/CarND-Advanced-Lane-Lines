@@ -602,7 +602,7 @@ def calculate_distance_from_center(binary_warped, left_fit, right_fit,
     return round(center_dist, 2)
 
 
-def draw_lane_space(image, warped, Minv, left_fitx, right_fitx):
+def draw_lane_space(image, warped, Minv, left_fitx, right_fitx, ploty):
     if left_fitx is None or right_fitx is None:
         return image
 
@@ -751,7 +751,7 @@ class LaneProcessor:
             print("Skipped distance")
             center_dist = center_dist_prev
 
-        main_lane_space_image = draw_lane_space(image, main_thresh_image, Minv, left_line, right_line)
+        main_lane_space_image = draw_lane_space(image, main_thresh_image, Minv, left_line, right_line, ploty)
 
         search_area_image = get_search_area_image(out_img, left_line, right_line, ploty)
         thresh_debug_image = debug_image(main_thresh_image)
@@ -988,7 +988,7 @@ if __name__ == "__main__":
     print("right_radius: ", right_radius, "m")
     print("distance from center: ", center_dist, "m")
 
-    main_lane_space_image = draw_lane_space(example_test_image, main_thresh_image, Minv, left_fitx, right_fitx)
+    main_lane_space_image = draw_lane_space(example_test_image, main_thresh_image, Minv, left_fitx, right_fitx, ploty)
 
     plt.close()
     plt.imshow(main_lane_space_image)
