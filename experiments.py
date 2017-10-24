@@ -1,4 +1,3 @@
-import copy
 import glob
 import io
 import os
@@ -635,29 +634,40 @@ class LaneProcessor:
         self.right_lines = deque(maxlen=QUEUE_LENGTH)
         self.left_rads = deque(maxlen=QUEUE_LENGTH)
         self.right_rads = deque(maxlen=QUEUE_LENGTH)
+        self.center_dists = deque(maxlen=QUEUE_LENGTH)
+        self.count = 0
 
         self.objpoints = objpoints
         self.imgpoints = imgpoints
 
     def valid_line(self, line, prev, threshold):
+        if prev is None:
+            return True
+
         line_min = np.min(line)
         line_max = np.max(line)
         prev_min = np.min(prev)
         prev_max = np.max(prev)
 
-        over_threshold = (abs(line_min - prev_min) > threshold) or (abs(line_max - prev_max) > threshold)
+        min_over_threshold = abs(line_min - prev_min) > threshold
+        max_over_threshold = abs(line_max - prev_max) > threshold
+
+        over_threshold = min_over_threshold or max_over_threshold
+
+        if min_over_threshold:
+            print("{} min. {} -> {}".format(self.count, line_min, prev_min), flush=True)
+
+        if max_over_threshold:
+            print("{} max. {} -> {}".format(self.count, line_max, prev_max), flush=True)
 
         return not over_threshold
 
-    def mean_value(self, value, values, safe=False):
-        if safe:
-            values = copy.copy(values)
-
+    def mean_value(self, value, values, dtype=np.int32):
         if value is not None:
             values.append(value)
 
         if len(values) > 0:
-            value = np.mean(values, axis=0, dtype=np.int32)
+            value = np.mean(values, axis=0, dtype=dtype)
         return value
 
     def process_simple(self, image):
@@ -690,75 +700,56 @@ class LaneProcessor:
         (leftx, lefty, rightx, righty), (left_fit, right_fit), out_img = \
             find_fitpolynomial(main_thresh_image, histogram)
 
-        # Generate x and y values for plotting
         left_line = right_line = None
+        left_radius = right_radius = None
+        center_dist = None
 
         valid_left_line = False
         valid_right_line = False
 
-        # left_line = self.mean_value(left_line, self.left_lines)
-        # right_line = self.mean_value(right_line, self.right_lines)
+        left_line_prev = self.mean_value(None, self.left_lines)
+        right_line_prev = self.mean_value(None, self.right_lines)
+        left_rads_prev = self.mean_value(None, self.left_rads)
+        right_rads_prev = self.mean_value(None, self.right_rads)
+        center_dist_prev = self.mean_value(None, self.center_dists, dtype=np.float32)
 
         if left_fit is None:
-            left_line = self.mean_value(None, self.left_lines)
+            left_line = left_line_prev
         else:
             left_line = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
-            left_line_avg = self.mean_value(left_line, self.left_lines, safe=True)
-            valid_left_line = self.valid_line(left_line, left_line_avg, line_threshold)
+            valid_left_line = self.valid_line(left_line, left_line_prev, line_threshold)
 
         if right_fit is None:
-            right_line = self.mean_value(None, self.right_lines)
+            right_line = right_line_prev
         else:
             right_line = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
-            right_line_avg = self.mean_value(right_line, self.right_lines, safe=True)
-            valid_right_line = self.valid_line(right_line, right_line_avg, line_threshold)
-
-        left_radius = right_radius = None
-        if leftx is None or lefty is None:
-            left_radius = self.mean_value(None, self.left_rads)
-        else:
-            left_radius = calculate_radius(leftx, lefty, ploty)
-
-        if rightx is None or righty is None:
-            right_radius = self.mean_value(None, self.right_rads)
-        else:
-            right_radius = calculate_radius(rightx, righty, ploty)
-
-        # TODO: calculate base on avarage
-        # center_dist = calculate_distance_from_center(main_thresh_image, left_fit, right_fit)
-
-        left_line_orig = left_line
-        right_line_orig = right_line
-        left_line_orig_min = np.min(left_line_orig)
-        right_line_orig_min = np.min(right_line_orig)
-        left_line_orig_max = np.max(left_line_orig)
-        right_line_orig_max = np.max(right_line_orig)
-
-        left_line_avg = self.mean_value(left_line, self.left_lines)
-        right_line_avg = self.mean_value(right_line, self.right_lines)
-        left_line_avg_min = np.min(left_line_avg)
-        right_line_avg_min = np.min(right_line_avg)
-        left_line_avg_max = np.max(left_line_avg)
-        right_line_avg_max = np.max(right_line_avg)
+            valid_right_line = self.valid_line(right_line, right_line_prev, line_threshold)
 
         if valid_left_line:
             left_line = self.mean_value(left_line, self.left_lines)
-            left_radius = self.mean_value(left_radius, self.left_rads)
+            left_radius = self.mean_value(calculate_radius(leftx, lefty, ploty), self.left_rads)
         else:
             print("Skipped left")
-            left_line = self.mean_value(None, self.left_lines)
-            left_radius = self.mean_value(None, self.left_rads)
+            left_line = left_line_prev
+            left_radius = left_rads_prev
 
         if valid_right_line:
             right_line = self.mean_value(right_line, self.right_lines)
-            right_radius = self.mean_value(right_radius, self.right_rads)
+            right_radius = self.mean_value(calculate_radius(rightx, righty, ploty), self.right_rads)
         else:
             print("Skipped right")
-            right_line = self.mean_value(None, self.right_lines)
-            right_radius = self.mean_value(None, self.right_rads)
+            right_line = right_line_prev
+            right_radius = right_rads_prev
 
         if left_line is None or right_line is None:
             return image
+
+        if valid_left_line and valid_right_line:
+            center_dist = self.mean_value(calculate_distance_from_center(main_thresh_image, left_fit, right_fit),
+                                          self.center_dists, dtype=np.float32)
+        else:
+            print("Skipped distance")
+            center_dist = center_dist_prev
 
         main_lane_space_image = draw_lane_space(image, main_thresh_image, Minv, left_line, right_line)
 
@@ -767,64 +758,27 @@ class LaneProcessor:
 
         combined_image = combine_3_images(main_lane_space_image, search_area_image, thresh_debug_image)
 
-        # left_line = right_line = None
         ox = 80
         oy = 40
 
-        # cv2.putText(combined_image, "Left radius: %s m." % left_radius, (ox, oy), cv2.FONT_HERSHEY_SIMPLEX, 1,
-        #             (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
-        # oy += 30
-        # cv2.putText(combined_image, "Right radius: %s m." % right_radius, (ox, oy), cv2.FONT_HERSHEY_SIMPLEX, 1,
-        #             (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
-        # oy += 30
-        # cv2.putText(combined_image, "Center: %s m." % center_dist, (ox, oy), cv2.FONT_HERSHEY_SIMPLEX, 1,
-        #             (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
-        # oy += 30
-        #
-
-        # left_line_orig_min = np.min(left_line_orig)
-        # right_line_orig_min = np.min(right_line_orig)
-        # left_line_orig_max = np.max(left_line_orig)
-        # right_line_orig_max = np.max(right_line_orig)
-        #
-        # left_line_avg_min = np.min(left_line_avg)
-        # right_line_avg_min = np.min(right_line_avg)
-        # left_line_avg_max = np.max(left_line_avg)
-        # right_line_avg_max = np.max(right_line_avg)
-        cv2.putText(combined_image, "left_line_orig_min: %s" % left_line_orig_min, (ox, oy),
+        cv2.putText(combined_image, "#%s" % self.count, (ox, oy),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
         oy += 30
-        cv2.putText(combined_image, "right_line_orig_min: %s" % right_line_orig_min, (ox, oy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
+        cv2.putText(combined_image, "Left radius: %s m." % left_radius, (ox, oy), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                    (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
         oy += 30
-        cv2.putText(combined_image, "left_line_orig_max: %s" % left_line_orig_max, (ox, oy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
+        cv2.putText(combined_image, "Right radius: %s m." % right_radius, (ox, oy), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                    (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
         oy += 30
-        cv2.putText(combined_image, "right_line_orig_max: %s" % right_line_orig_max, (ox, oy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
-        oy += 30
-        cv2.putText(combined_image, "left_line_avg_min: %s" % left_line_avg_min, (ox, oy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
-        oy += 30
-        cv2.putText(combined_image, "right_line_avg_min: %s" % right_line_avg_min, (ox, oy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
-        oy += 30
-        cv2.putText(combined_image, "left_line_avg_max: %s" % left_line_avg_max, (ox, oy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
-        oy += 30
-        cv2.putText(combined_image, "right_line_avg_max: %s" % right_line_avg_max, (ox, oy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
-        oy += 30
-        cv2.putText(combined_image, "left ok: %s" % valid_left_line, (ox, oy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
-        oy += 30
-        cv2.putText(combined_image, "right ok: %s" % valid_right_line, (ox, oy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
+        cv2.putText(combined_image, "Center: %s m." % center_dist, (ox, oy), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                    (255, 255, 255), lineType=cv2.LINE_AA, thickness=2)
         oy += 30
 
         # for debug purposes
-        cv2.imwrite(os.path.join('output_images', 'sample_out_2.png'),
+        cv2.imwrite(os.path.join('output_images', 'debug_image.png'),
                     cv2.cvtColor(combined_image, cv2.COLOR_RGB2BGR))
+
+        self.count += 1
 
         return combined_image
 
@@ -1041,5 +995,7 @@ if __name__ == "__main__":
     plt.axis('off')
     # plt.show()
 
-    tag_video("project_video.mp4", "out_project_video.mp4", objpoints, imgpoints, subclip_secs=(38, 42))
-    tag_video("challenge_video.mp4", "out_challenge_video.mp4", objpoints, imgpoints, subclip_secs=(3, 7))
+    # tag_video("project_video.mp4", "out_project_video.mp4", objpoints, imgpoints, subclip_secs=(38, 42))
+    # tag_video("challenge_video.mp4", "out_challenge_video.mp4", objpoints, imgpoints, subclip_secs=(3, 7))
+    tag_video("project_video.mp4", "out_project_video.mp4", objpoints, imgpoints)
+    tag_video("challenge_video.mp4", "out_challenge_video.mp4", objpoints, imgpoints)
