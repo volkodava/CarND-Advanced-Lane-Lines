@@ -124,6 +124,6 @@ Here's a [link to my project video result](./output_images/out_project_video.mp4
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Most of the problems were caused by shadows (challenge video), different lighting conditions. I've spent most of the time playing with color ranges / color spaces. As result I have developed some UI tools that helped me to proceed faster such as [link](ConfigColorUi.py#L1), [link](ConfigCropUi.py#L1), [link](ConfigRoiUi.py#L1), [link](ConfigThreshUi.py#L1).
+Most of the problems were caused by shadows (challenge video), different lighting conditions. I've spent most of the time playing with color ranges / color spaces. As result I have developed some UI tools that helped me to proceed faster such as [ConfigColorUi.py](ConfigColorUi.py#L1), [ConfigCropUi.py](ConfigCropUi.py#L1), [ConfigRoiUi.py](ConfigRoiUi.py#L1), [ConfigThreshUi.py](ConfigThreshUi.py#L1).
 
 I think to make the algorithm more robust we can apply knowledge from the deep learning course with parameters we have utilized in this project.
